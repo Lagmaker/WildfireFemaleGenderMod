@@ -40,7 +40,9 @@ import org.joml.Vector3f;
  * this is never written as its own component on item stacks, but instead uses the {@link DataComponents#CUSTOM_DATA custom NBT data component}
  * (under the {@code WildfireGender} key) for compatibility with vanilla clients on servers.</p>
  */
-public record BreastDataComponent(float breastSize, float cleavage, Vector3f offsets, boolean jacket, @Nullable CustomData nbtComponent) {
+public record BreastDataComponent(float breastSize, float cleavage, Vector3f offsets, boolean jacket,
+                                  float width, float height, float projection, float balance,
+                                  @Nullable CustomData nbtComponent) {
 
     private static final String KEY = "WildfireGender";
     private static final Codec<BreastDataComponent> CODEC = RecordCodecBuilder.create(instance -> instance.group(
@@ -61,8 +63,22 @@ public record BreastDataComponent(float breastSize, float cleavage, Vector3f off
                     .forGetter(component -> component.offsets.y),
             WildfireHelper.boundedFloat(Configuration.BREASTS_OFFSET_Z)
                     .optionalFieldOf("ZOffset", 0f)
-                    .forGetter(component -> component.offsets.y)
-        ).apply(instance, (breastSize, cleavage, jacket, x, y, z) -> new BreastDataComponent(breastSize, cleavage, new Vector3f(x, y, z), jacket, null))
+                    .forGetter(component -> component.offsets.z),
+            WildfireHelper.boundedFloat(Configuration.BREASTS_WIDTH)
+                    .optionalFieldOf("Width", Configuration.BREASTS_WIDTH.getDefault())
+                    .forGetter(BreastDataComponent::width),
+            WildfireHelper.boundedFloat(Configuration.BREASTS_HEIGHT)
+                    .optionalFieldOf("Height", Configuration.BREASTS_HEIGHT.getDefault())
+                    .forGetter(BreastDataComponent::height),
+            WildfireHelper.boundedFloat(Configuration.BREASTS_PROJECTION)
+                    .optionalFieldOf("Projection", Configuration.BREASTS_PROJECTION.getDefault())
+                    .forGetter(BreastDataComponent::projection),
+            WildfireHelper.boundedFloat(Configuration.BREASTS_BALANCE)
+                    .optionalFieldOf("Balance", Configuration.BREASTS_BALANCE.getDefault())
+                    .forGetter(BreastDataComponent::balance)
+        ).apply(instance, (breastSize, cleavage, jacket, x, y, z, width, height, projection, balance) ->
+                new BreastDataComponent(breastSize, cleavage, new Vector3f(x, y, z), jacket,
+                        width, height, projection, balance, null))
     );
 
     public static @Nullable BreastDataComponent fromPlayer(@NotNull Player player, @NotNull PlayerConfig config) {
@@ -70,8 +86,10 @@ public record BreastDataComponent(float breastSize, float cleavage, Vector3f off
             return null;
         }
 
-        return new BreastDataComponent(config.getBustSize(), config.getBreasts().getCleavage(), config.getBreasts().getOffsets(),
-                player.isModelPartShown(PlayerModelPart.JACKET), null);
+        var breasts = config.getBreasts();
+        return new BreastDataComponent(config.getBustSize(), breasts.getCleavage(), breasts.getOffsets(),
+                player.isModelPartShown(PlayerModelPart.JACKET), breasts.getWidth(), breasts.getHeight(),
+                breasts.getProjection(), breasts.getBalance(), null);
     }
 
     public static @Nullable BreastDataComponent fromComponent(@Nullable CustomData component) {
@@ -103,6 +121,6 @@ public record BreastDataComponent(float breastSize, float cleavage, Vector3f off
     }
 
     private BreastDataComponent withComponent(CustomData component) {
-        return new BreastDataComponent(breastSize, cleavage, offsets, jacket, component);
+        return new BreastDataComponent(breastSize, cleavage, offsets, jacket, width, height, projection, balance, component);
     }
 }

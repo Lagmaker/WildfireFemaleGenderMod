@@ -39,13 +39,21 @@ public final class Breasts {
             ByteBufCodecs.FLOAT, Breasts::getZOffset,
             ByteBufCodecs.BOOL, Breasts::isUniboob,
             ByteBufCodecs.FLOAT, Breasts::getCleavage,
-            (x, y, z, uniboob, cleavage) -> {
+            ByteBufCodecs.FLOAT, Breasts::getWidth,
+            ByteBufCodecs.FLOAT, Breasts::getHeight,
+            ByteBufCodecs.FLOAT, Breasts::getProjection,
+            ByteBufCodecs.FLOAT, Breasts::getBalance,
+            (x, y, z, uniboob, cleavage, width, height, projection, balance) -> {
                 Breasts breasts = new Breasts();
-                breasts.xOffset = x;
-                breasts.yOffset = y;
-                breasts.zOffset = z;
-                breasts.cleavage = cleavage;
-                breasts.uniboob = uniboob;
+                breasts.updateXOffset(x);
+                breasts.updateYOffset(y);
+                breasts.updateZOffset(z);
+                breasts.updateUniboob(uniboob);
+                breasts.updateCleavage(cleavage);
+                breasts.updateWidth(width);
+                breasts.updateHeight(height);
+                breasts.updateProjection(projection);
+                breasts.updateBalance(balance);
                 return breasts;
             }
     );
@@ -54,6 +62,10 @@ public final class Breasts {
             yOffset = Configuration.BREASTS_OFFSET_Y.getDefault(),
             zOffset = Configuration.BREASTS_OFFSET_Z.getDefault();
     private float cleavage = Configuration.BREASTS_CLEAVAGE.getDefault();
+    private float width = Configuration.BREASTS_WIDTH.getDefault();
+    private float height = Configuration.BREASTS_HEIGHT.getDefault();
+    private float projection = Configuration.BREASTS_PROJECTION.getDefault();
+    private float balance = Configuration.BREASTS_BALANCE.getDefault();
     private boolean uniboob = Configuration.BREASTS_UNIBOOB.getDefault();
 
     private <VALUE> boolean updateValue(ConfigKey<VALUE> key, VALUE value, Consumer<VALUE> setter) {
@@ -142,6 +154,49 @@ public final class Breasts {
         return updateValue(Configuration.BREASTS_CLEAVAGE, value, v -> this.cleavage = v);
     }
 
+    public float getWidth() {
+        return width;
+    }
+
+    public boolean updateWidth(float value) {
+        return updateValue(Configuration.BREASTS_WIDTH, value, v -> this.width = v);
+    }
+
+    public float getHeight() {
+        return height;
+    }
+
+    public boolean updateHeight(float value) {
+        return updateValue(Configuration.BREASTS_HEIGHT, value, v -> this.height = v);
+    }
+
+    public float getProjection() {
+        return projection;
+    }
+
+    public boolean updateProjection(float value) {
+        return updateValue(Configuration.BREASTS_PROJECTION, value, v -> this.projection = v);
+    }
+
+    /**
+     * Relative size difference between the left and right breast. Positive values enlarge the
+     * left side and reduce the right side by the same amount.
+     */
+    public float getBalance() {
+        return balance;
+    }
+
+    public boolean updateBalance(float value) {
+        return updateValue(Configuration.BREASTS_BALANCE, value, v -> this.balance = v);
+    }
+
+    public void resetShape() {
+        updateWidth(Configuration.BREASTS_WIDTH.getDefault());
+        updateHeight(Configuration.BREASTS_HEIGHT.getDefault());
+        updateProjection(Configuration.BREASTS_PROJECTION.getDefault());
+        updateBalance(Configuration.BREASTS_BALANCE.getDefault());
+    }
+
     /**
      * Determines if breast physics should be independent of each other; also referred to as Dual-Physics in the UI
      *
@@ -162,10 +217,14 @@ public final class Breasts {
      * Copy settings from the provided {@link Breasts breasts data} onto the current instance
      */
     public void copyFrom(Breasts breasts) {
-        this.xOffset = breasts.xOffset;
-        this.yOffset = breasts.yOffset;
-        this.zOffset = breasts.zOffset;
-        this.cleavage = breasts.cleavage;
-        this.uniboob = breasts.uniboob;
+        updateXOffset(breasts.xOffset);
+        updateYOffset(breasts.yOffset);
+        updateZOffset(breasts.zOffset);
+        updateCleavage(breasts.cleavage);
+        updateUniboob(breasts.uniboob);
+        updateWidth(breasts.width);
+        updateHeight(breasts.height);
+        updateProjection(breasts.projection);
+        updateBalance(breasts.balance);
     }
 }

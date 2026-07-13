@@ -70,7 +70,8 @@ public class GenderLayer<S extends HumanoidRenderState, M extends HumanoidModel<
     protected IGenderArmor genderArmor = IGenderArmor.EMPTY;
     protected boolean isChestplateOccupied, bounceEnabled, breathingAnimation;
     protected float breastOffsetX, breastOffsetY, breastOffsetZ, lPhysPositionY, lPhysPositionX, rPhysPositionY, rPhysPositionX,
-            lPhysBounceRotation, rPhysBounceRotation, breastSize, zOffset, outwardAngle;
+            lPhysBounceRotation, rPhysBounceRotation, breastSize, zOffset, outwardAngle,
+            shapeWidth, shapeHeight, shapeProjection, shapeBalance;
 
     public GenderLayer(RenderLayerParent<S, M> render) {
         super(render);
@@ -137,6 +138,10 @@ public class GenderLayer<S extends HumanoidRenderState, M extends HumanoidModel<
         breastOffsetX = WildfireHelper.round(breasts.xOffset, 1);
         breastOffsetY = -WildfireHelper.round(breasts.yOffset, 1);
         breastOffsetZ = -WildfireHelper.round(breasts.zOffset, 1);
+        shapeWidth = breasts.width;
+        shapeHeight = breasts.height;
+        shapeProjection = breasts.projection;
+        shapeBalance = breasts.balance;
 
         isUniboob = breasts.uniboob;
 
@@ -253,7 +258,8 @@ public class GenderLayer<S extends HumanoidRenderState, M extends HumanoidModel<
         }
 
         matrixStack.mulPose(rotationTransform);
-        matrixStack.scale(0.9995f, 1f, 1f); //z-fighting FIXXX
+        float sideScale = 1f + (side.isLeft ? shapeBalance : -shapeBalance);
+        matrixStack.scale(shapeWidth * sideScale * 0.9995f, shapeHeight * sideScale, shapeProjection * sideScale);
     }
 
     private void renderBreast(S state, PoseStack poseStack, SubmitNodeCollector collector, int overlay, BreastSide side) {

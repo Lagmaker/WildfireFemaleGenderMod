@@ -71,7 +71,7 @@ public class WildfireBreastCustomizationScreen extends BaseWildfireScreen {
         addButton(builder -> builder
                 .message(() -> Component.translatable("wildfire_gender.breast_customization.tab_customization"))
                 .position(this.width / 2 - 130, y - 52)
-                .size(172/2 - 2, 12)
+                .size(62, 12)
                 .onPress(button -> {
                     currentTab = Tab.CUSTOMIZATION;
                     rebuildWidgets();
@@ -79,9 +79,19 @@ public class WildfireBreastCustomizationScreen extends BaseWildfireScreen {
                 .active(currentTab != Tab.CUSTOMIZATION));
 
         addButton(builder -> builder
+                .message(() -> Component.translatable("wildfire_gender.breast_customization.tab_shape"))
+                .position(this.width / 2 - 65, y - 52)
+                .size(62, 12)
+                .onPress(button -> {
+                    currentTab = Tab.SHAPE;
+                    rebuildWidgets();
+                })
+                .active(currentTab != Tab.SHAPE));
+
+        addButton(builder -> builder
                 .message(() -> Component.translatable("wildfire_gender.breast_customization.tab_physics"))
-                .position(this.width / 2 - 42, y - 52)
-                .size(172/2 - 2, 12)
+                .position(this.width / 2, y - 52)
+                .size(62, 12)
                 .onPress(button -> {
                     currentTab = Tab.PHYSICS;
                     rebuildWidgets();
@@ -90,8 +100,8 @@ public class WildfireBreastCustomizationScreen extends BaseWildfireScreen {
 
         addButton(builder -> builder
                 .message(() -> Component.translatable("wildfire_gender.breast_customization.tab_miscellaneous"))
-                .position(this.width / 2 + 46, y - 52)
-                .size(172/2 - 2, 12)
+                .position(this.width / 2 + 65, y - 52)
+                .size(62, 12)
                 .onPress(button -> {
                     currentTab = Tab.MISC;
                     rebuildWidgets();
@@ -101,6 +111,7 @@ public class WildfireBreastCustomizationScreen extends BaseWildfireScreen {
         final int tabOffsetY = y - 3 - 21;
         switch(currentTab) {
             case CUSTOMIZATION -> initCustomizationTab(tabOffsetY);
+            case SHAPE -> initShapeTab(tabOffsetY);
             case PHYSICS -> initPhysicsTab(tabOffsetY);
             case MISC -> initMiscTab(tabOffsetY);
         }
@@ -108,6 +119,82 @@ public class WildfireBreastCustomizationScreen extends BaseWildfireScreen {
         if(minecraft.options.keyJump.isDown()) {
             minecraft.options.keyJump.setDown(false);
         }
+    }
+
+    private void initShapeTab(final int tabOffsetY) {
+        final var plr = Objects.requireNonNull(getPlayer(), "getPlayer()");
+        final var breasts = plr.getBreasts();
+
+        addSlider(builder -> builder
+                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.width", Math.round(value * 100)))
+                .position(this.width / 2 - 36, tabOffsetY - 2)
+                .size(HALF_WIDTH, 20)
+                .range(Configuration.BREASTS_WIDTH)
+                .current(breasts.getWidth())
+                .update(breasts::updateWidth)
+                .step(0.01)
+                .mouseStep(0.005));
+
+        addSlider(builder -> builder
+                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.vertical_fullness", Math.round(value * 100)))
+                .position(this.width / 2 - 36 + HALF_WIDTH + 4, tabOffsetY - 2)
+                .size(HALF_WIDTH, 20)
+                .range(Configuration.BREASTS_HEIGHT)
+                .current(breasts.getHeight())
+                .update(breasts::updateHeight)
+                .step(0.01)
+                .mouseStep(0.005));
+
+        addSlider(builder -> builder
+                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.projection", Math.round(value * 100)))
+                .position(this.width / 2 - 36, tabOffsetY + 22)
+                .size(FULL_WIDTH, 20)
+                .range(Configuration.BREASTS_PROJECTION)
+                .current(breasts.getProjection())
+                .update(breasts::updateProjection)
+                .step(0.01)
+                .mouseStep(0.005));
+
+        addSlider(builder -> builder
+                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.balance", formatBalance(value)))
+                .position(this.width / 2 - 36, tabOffsetY + 46)
+                .size(FULL_WIDTH, 20)
+                .range(Configuration.BREASTS_BALANCE)
+                .current(breasts.getBalance())
+                .update(breasts::updateBalance)
+                .step(0.0125)
+                .mouseStep(0.0125)
+                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.tooltip.balance"))));
+
+        addButton(builder -> builder
+                .message(() -> Component.translatable("wildfire_gender.breast_customization.reset_shape"))
+                .position(this.width / 2 - 36, tabOffsetY + 70)
+                .size(HALF_WIDTH, 20)
+                .onPress(button -> {
+                    breasts.resetShape();
+                    plr.save();
+                    rebuildWidgets();
+                }));
+
+        addButton(builder -> builder
+                .message(() -> Component.translatable("wildfire_gender.presets.button"))
+                .position(this.width / 2 - 36 + HALF_WIDTH + 4, tabOffsetY + 70)
+                .size(HALF_WIDTH, 20)
+                .onPress(_ -> {
+                    //~ if >=26.2 'minecraft.setScreen' -> 'minecraft.gui.setScreen'
+                    minecraft.gui.setScreen(new WildfirePresetScreen(this, playerUUID));
+                }));
+    }
+
+    private static Component formatBalance(float value) {
+        int percent = Math.round(Math.abs(value) * 100);
+        if(percent == 0) {
+            return Component.translatable("wildfire_gender.wardrobe.slider.balance_even");
+        }
+        return Component.translatable(
+                value > 0 ? "wildfire_gender.wardrobe.slider.balance_left" : "wildfire_gender.wardrobe.slider.balance_right",
+                percent
+        );
     }
 
     @Override
@@ -378,6 +465,7 @@ public class WildfireBreastCustomizationScreen extends BaseWildfireScreen {
 
     private enum Tab {
         CUSTOMIZATION(BACKGROUND_CUSTOMIZATION, 80),
+        SHAPE(BACKGROUND_CUSTOMIZATION, 104),
         PHYSICS(BACKGROUND_PHYSICS, 104),
         MISC(BACKGROUND_MISC, 128),
         ;

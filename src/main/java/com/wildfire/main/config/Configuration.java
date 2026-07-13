@@ -38,7 +38,11 @@ public class Configuration extends AbstractConfiguration {
     public static final String CONFIG_DIR = "FemaleGenderMod";
 
     public static final EnumConfigKey<Gender> GENDER = new EnumConfigKey<>("gender", Gender.MALE, Gender.BY_ID);
-    public static final FloatConfigKey BUST_SIZE = new FloatConfigKey("bust_size", 0.6F, 0, 0.8f);
+    /**
+     * Overall breast size. The legacy editor stopped at 0.8 (100% in the UI); keep the same
+     * default and scale while allowing a much broader range of bodies.
+     */
+    public static final FloatConfigKey BUST_SIZE = new FloatConfigKey("bust_size", 0.6F, 0, 2.4f);
     public static final BooleanConfigKey HURT_SOUNDS = new BooleanConfigKey("hurt_sounds", true);
     public static final FloatConfigKey VOICE_PITCH = new FloatConfigKey("voice_pitch", 1F, 0.8f, 1.2f);
 
@@ -47,6 +51,10 @@ public class Configuration extends AbstractConfiguration {
     public static final FloatConfigKey BREASTS_OFFSET_Z = new FloatConfigKey("breasts_zOffset", 0.0F, -1, 0);
     public static final BooleanConfigKey BREASTS_UNIBOOB = new BooleanConfigKey("breasts_uniboob", true);
     public static final FloatConfigKey BREASTS_CLEAVAGE = new FloatConfigKey("breasts_cleavage", 0, 0, 0.1F);
+    public static final FloatConfigKey BREASTS_WIDTH = new FloatConfigKey("breasts_width", 1F, 0.5F, 2F);
+    public static final FloatConfigKey BREASTS_HEIGHT = new FloatConfigKey("breasts_height", 1F, 0.5F, 2F);
+    public static final FloatConfigKey BREASTS_PROJECTION = new FloatConfigKey("breasts_projection", 1F, 0.5F, 2.5F);
+    public static final FloatConfigKey BREASTS_BALANCE = new FloatConfigKey("breasts_balance", 0F, -0.4F, 0.4F);
 
     public static final BooleanConfigKey BREAST_PHYSICS = new BooleanConfigKey("breast_physics", true);
     public static final BooleanConfigKey SHOW_IN_ARMOR = new BooleanConfigKey("show_in_armor", true);
@@ -107,6 +115,10 @@ public class Configuration extends AbstractConfiguration {
             new RegisteredKey<>(BREASTS_OFFSET_Z, Breasts::getZOffset, Breasts::updateZOffset),
             new RegisteredKey<>(BREASTS_UNIBOOB, Breasts::isUniboob, Breasts::updateUniboob),
             new RegisteredKey<>(BREASTS_CLEAVAGE, Breasts::getCleavage, Breasts::updateCleavage),
+            new RegisteredKey<>(BREASTS_WIDTH, Breasts::getWidth, Breasts::updateWidth),
+            new RegisteredKey<>(BREASTS_HEIGHT, Breasts::getHeight, Breasts::updateHeight),
+            new RegisteredKey<>(BREASTS_PROJECTION, Breasts::getProjection, Breasts::updateProjection),
+            new RegisteredKey<>(BREASTS_BALANCE, Breasts::getBalance, Breasts::updateBalance),
 
             new RegisteredKey<>(BREAST_PHYSICS, PlayerConfig::hasBreastPhysics, PlayerConfig::updateBreastPhysics),
             new RegisteredKey<>(SHOW_IN_ARMOR, PlayerConfig::showBreastsInArmor, PlayerConfig::updateShowBreastsInArmor),

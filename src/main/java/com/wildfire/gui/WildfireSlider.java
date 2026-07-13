@@ -29,6 +29,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.input.KeyEvent;
@@ -226,6 +227,7 @@ public class WildfireSlider extends AbstractWidget {
         private @Nullable Double step = null;
         private @Nullable Double mouseStep = null;
         private boolean active = true;
+        private @Nullable Tooltip tooltip;
         private Float2ObjectFunction<Component> messageSupplier;
         private FloatConsumer onUpdate, onSave;
 
@@ -276,6 +278,11 @@ public class WildfireSlider extends AbstractWidget {
             return this;
         }
 
+        public Builder tooltip(@Nullable Tooltip tooltip) {
+            this.tooltip = tooltip;
+            return this;
+        }
+
         public Builder step(double step) {
             this.step = step;
             return this;
@@ -289,6 +296,7 @@ public class WildfireSlider extends AbstractWidget {
         public WildfireSlider build() {
             var built = new WildfireSlider(x, y, width, height, min, max, value, onUpdate, messageSupplier, onSave);
             built.active = active;
+            built.setTooltip(tooltip);
             if(step != null) {
                 built.setArrowKeyStep(step);
             }

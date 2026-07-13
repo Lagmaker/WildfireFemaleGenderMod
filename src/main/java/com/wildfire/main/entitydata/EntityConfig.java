@@ -128,6 +128,10 @@ public class EntityConfig {
         gender = pBustSize >= 0.02f ? Gender.FEMALE : Gender.MALE;
         breasts.updateCleavage(fromComponent.cleavage());
         breasts.updateOffsets(fromComponent.offsets());
+        breasts.updateWidth(fromComponent.width());
+        breasts.updateHeight(fromComponent.height());
+        breasts.updateProjection(fromComponent.projection());
+        breasts.updateBalance(fromComponent.balance());
         this.jacketLayer = fromComponent.jacket();
     }
 
@@ -283,6 +287,8 @@ public class EntityConfig {
         info.add("Uniboob: " + breasts.isUniboob());
         info.add("Cleavage: " + breasts.getCleavage());
         info.add("Offsets: (" + breasts.getXOffset() + ", " + breasts.getYOffset() + ", " + breasts.getZOffset() + ")");
+        info.add("Shape: width=" + breasts.getWidth() + ", height=" + breasts.getHeight()
+                + ", projection=" + breasts.getProjection() + ", balance=" + breasts.getBalance());
 
         return info;
     }

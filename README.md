@@ -21,6 +21,13 @@ H - Open Customization Settings
 
 [Pre 1.21.6] G - Open Customization Settings
 
+## Appearance Presets
+
+Open **Character Personalization → Shape → Presets** to save and apply named appearance presets.
+Presets are portable JSON files stored in **config/FemaleGenderMod/presets**. Each file records its preset
+schema, mod version, and Minecraft version. Presets from another mod or Minecraft version can be applied
+when their schema is compatible; unsupported schemas are blocked.
+
 ## License
 
 The Female Gender Mod is licensed under the GNU LGPLv3, a free and open-source license. For more information,
@@ -60,7 +67,8 @@ This isn't planned anymore, though isn't entirely off the table.
 <details>
 <summary>5) Can we have larger breasts?</summary>
 
-Nope. Stop asking. It isn't happening.
+Yes. The expanded appearance editor supports sizes up to 300%, independent width, height and fullness,
+and optional left/right asymmetry.
 
 </details>
 
