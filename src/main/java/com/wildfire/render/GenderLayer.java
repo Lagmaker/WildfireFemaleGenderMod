@@ -23,10 +23,11 @@ import com.wildfire.api.IGenderArmor;
 import com.wildfire.main.WildfireGender;
 import com.wildfire.main.WildfireHelper;
 import com.wildfire.main.config.ClientConfig;
+import com.wildfire.main.config.enums.BreastShape;
 import com.wildfire.main.uvs.UVLayout;
 import com.wildfire.mixins.accessors.LivingEntityRendererAccessor;
 import com.wildfire.render.WildfireModelRenderer.BreastModelBox;
-import com.wildfire.render.WildfireModelRenderer.OverlayModelBox;
+import com.wildfire.render.WildfireModelRenderer.ModelBox;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.model.HumanoidModel;
@@ -35,7 +36,6 @@ import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.entity.RenderLayerParent;
 import net.minecraft.client.renderer.entity.layers.RenderLayer;
-import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.client.renderer.entity.state.HumanoidRenderState;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.util.ARGB;
@@ -55,12 +55,16 @@ public class GenderLayer<S extends HumanoidRenderState, M extends HumanoidModel<
     private static final float DEG_TO_RAD = (float) (Math.PI / 180);
 
     @UnknownNullability("null until #resizeBox() is first called")
-    private BreastModelBox lBreast, rBreast;
+    private ModelBox lBreast, rBreast;
     @UnknownNullability("null until #resizeBox() is first called")
-    private OverlayModelBox lBreastWear, rBreastWear;
+    private ModelBox lBreastWear, rBreastWear;
+    @UnknownNullability("null until #resizeBox() is first called")
+    private ModelBox lNipple, rNipple;
 
     private @Nullable UVLayout prevLeftBreastUVLayout, prevRightBreastUVLayout,
         prevLeftBreastOverlayUVLayout, prevRightBreastOverlayUVLayout;
+    private @Nullable BreastShape previousShape;
+    private float previousNippleSize = Float.NaN;
 
     private final RenderLayerParent<S, M> context;
 
@@ -68,10 +72,11 @@ public class GenderLayer<S extends HumanoidRenderState, M extends HumanoidModel<
     // although ItemStack instances are mutable, this is safe to keep a reference to as this is a copy of the real stack
     protected ItemStack armorStack = ItemStack.EMPTY;
     protected IGenderArmor genderArmor = IGenderArmor.EMPTY;
-    protected boolean isChestplateOccupied, bounceEnabled, breathingAnimation;
+    protected boolean isChestplateOccupied, armorCoversBreasts, bounceEnabled, wobbleEnabled,
+            breathingAnimation, jacketLayerVisible, nippleDetail;
     protected float breastOffsetX, breastOffsetY, breastOffsetZ, lPhysPositionY, lPhysPositionX, rPhysPositionY, rPhysPositionX,
             lPhysBounceRotation, rPhysBounceRotation, breastSize, zOffset, outwardAngle,
-            shapeWidth, shapeHeight, shapeProjection, shapeBalance;
+            shapeWidth, shapeHeight, shapeProjection, shapeBalance, lPhysWobble, rPhysWobble;
 
     public GenderLayer(RenderLayerParent<S, M> render) {
         super(render);
@@ -123,6 +128,7 @@ public class GenderLayer<S extends HumanoidRenderState, M extends HumanoidModel<
         //Note: When the stack is empty the helper will fall back to an implementation that returns the proper data
         // TODO should this be moved into the render state?
         genderArmor = WildfireHelper.getArmorConfig(armorStack);
+        armorCoversBreasts = !armorStack.isEmpty() && genderArmor.coversBreasts();
         isChestplateOccupied = genderArmor.coversBreasts() && !genderState.armorPhysicsOverride;
         if(genderArmor.alwaysHidesBreasts() || !genderState.showBreastsInArmor && isChestplateOccupied) {
             //If the armor always hides breasts or there is armor and the player configured breasts
@@ -142,6 +148,9 @@ public class GenderLayer<S extends HumanoidRenderState, M extends HumanoidModel<
         shapeHeight = breasts.height;
         shapeProjection = breasts.projection;
         shapeBalance = breasts.balance;
+        nippleDetail = breasts.nipples;
+        jacketLayerVisible = genderState.hasJacketLayer;
+        wobbleEnabled = genderState.hasWobble;
 
         isUniboob = breasts.uniboob;
 
@@ -155,15 +164,18 @@ public class GenderLayer<S extends HumanoidRenderState, M extends HumanoidModel<
         lPhysPositionY = leftPhysicsState.getPositionY();
         lPhysPositionX = leftPhysicsState.getPositionX();
         lPhysBounceRotation = leftPhysicsState.getBounceRotation();
+        lPhysWobble = leftPhysicsState.getWobble();
         if(isUniboob) {
             rPhysPositionY = lPhysPositionY;
             rPhysPositionX = lPhysPositionX;
             rPhysBounceRotation = lPhysBounceRotation;
+            rPhysWobble = lPhysWobble;
         } else {
             GenderRenderState.BreastPhysicsState rightPhysicsState = genderState.rightBreastPhysics;
             rPhysPositionY = rightPhysicsState.getPositionY();
             rPhysPositionX = rightPhysicsState.getPositionX();
             rPhysBounceRotation = rightPhysicsState.getBounceRotation();
+            rPhysWobble = rightPhysicsState.getWobble();
         }
 
         breastSize = Math.min(bSize * 1.5f, 0.7f); // Limit the max size to 0.7f
@@ -194,18 +206,43 @@ public class GenderLayer<S extends HumanoidRenderState, M extends HumanoidModel<
         if(!Objects.equals(this.prevLeftBreastUVLayout, state.leftBreastUVLayout)
                 || !Objects.equals(this.prevRightBreastUVLayout, state.rightBreastUVLayout)
                 || !Objects.equals(this.prevLeftBreastOverlayUVLayout, state.leftBreastOverlayUVLayout)
-                || !Objects.equals(this.prevRightBreastOverlayUVLayout, state.rightBreastOverlayUVLayout)) {
+                || !Objects.equals(this.prevRightBreastOverlayUVLayout, state.rightBreastOverlayUVLayout)
+                || previousShape != state.breasts.shape
+                || Float.compare(previousNippleSize, state.breasts.nippleSize) != 0) {
 
             this.prevLeftBreastUVLayout = state.leftBreastUVLayout;
             this.prevRightBreastUVLayout = state.rightBreastUVLayout;
             this.prevLeftBreastOverlayUVLayout = state.leftBreastOverlayUVLayout;
             this.prevRightBreastOverlayUVLayout = state.rightBreastOverlayUVLayout;
+            this.previousShape = state.breasts.shape;
+            this.previousNippleSize = state.breasts.nippleSize;
 
-            this.lBreast = new BreastModelBox(64, 64, -4F, 0.0F, 0F, 4, 5, 3, 0.0F, state.leftBreastUVLayout);
-            this.rBreast = new BreastModelBox(64, 64, 0F, 0.0F, 0F, 4, 5, 3, 0.0F, state.rightBreastUVLayout);
-            this.lBreastWear = new OverlayModelBox(64, 64, -4F, 0.0F, 0F, 4, 5, 3, 0.0F, state.leftBreastOverlayUVLayout);
-            this.rBreastWear = new OverlayModelBox(64, 64, 0, 0.0F, 0F, 4, 5, 3, 0.0F, state.rightBreastOverlayUVLayout);
+            this.lBreast = createBreastModel(64, 64, -4F, state.breasts.shape, state.leftBreastUVLayout);
+            this.rBreast = createBreastModel(64, 64, 0F, state.breasts.shape, state.rightBreastUVLayout);
+            this.lBreastWear = createBreastModel(64, 64, -4F, state.breasts.shape, state.leftBreastOverlayUVLayout);
+            this.rBreastWear = createBreastModel(64, 64, 0F, state.breasts.shape, state.rightBreastOverlayUVLayout);
+            this.lNipple = createNippleModel(-2F, state.breasts.shape, state.breasts.nippleSize,
+                    state.leftBreastUVLayout);
+            this.rNipple = createNippleModel(2F, state.breasts.shape, state.breasts.nippleSize,
+                    state.rightBreastUVLayout);
         }
+    }
+
+    protected static ModelBox createBreastModel(int textureWidth, int textureHeight, float x,
+                                                 BreastShape shape, UVLayout layout) {
+        if(shape == BreastShape.CLASSIC) {
+            return new BreastModelBox(textureWidth, textureHeight, x, 0, 0, 4, 5, 3, 0, layout);
+        }
+        return new ProfiledBreastModelBox(textureWidth, textureHeight, x, shape, layout);
+    }
+
+    private static ModelBox createNippleModel(float centerX, BreastShape shape, float configuredSize,
+                                               UVLayout sourceLayout) {
+        float size = 0.45f + configuredSize * 0.65f;
+        float projection = 0.28f + configuredSize * 0.34f;
+        return new NippleDetailModelBox(64, 64, centerX, ProfiledBreastModelBox.nippleY(shape),
+                ProfiledBreastModelBox.nippleFrontZ(shape), size, projection,
+                ProfiledBreastModelBox.nippleSurfaceNormal(shape), sourceLayout);
     }
 
     protected void setupTransformations(S state, M model, PoseStack matrixStack, BreastSide side) {
@@ -259,7 +296,15 @@ public class GenderLayer<S extends HumanoidRenderState, M extends HumanoidModel<
 
         matrixStack.mulPose(rotationTransform);
         float sideScale = 1f + (side.isLeft ? shapeBalance : -shapeBalance);
-        matrixStack.scale(shapeWidth * sideScale * 0.9995f, shapeHeight * sideScale, shapeProjection * sideScale);
+        float wobble = bounceEnabled && wobbleEnabled ? (side.isLeft ? lPhysWobble : rPhysWobble) : 0f;
+        float widthWobble = 1f - wobble * 0.22f;
+        float heightWobble = 1f + wobble * 0.42f;
+        float projectionWobble = 1f - wobble * 0.34f;
+        matrixStack.scale(
+                shapeWidth * sideScale * widthWobble * 0.9995f,
+                shapeHeight * sideScale * heightWobble,
+                shapeProjection * sideScale * projectionWobble
+        );
     }
 
     private void renderBreast(S state, PoseStack poseStack, SubmitNodeCollector collector, int overlay, BreastSide side) {
@@ -272,11 +317,17 @@ public class GenderLayer<S extends HumanoidRenderState, M extends HumanoidModel<
         var model = side.isLeft ? lBreast : rBreast;
         collector.order(1).submitModel(new BreastModel(model), state, poseStack, type, state.lightCoords, overlay, color, null, state.outlineColor, null);
 
-        if(state instanceof AvatarRenderState playerState && playerState.showJacket) {
+        if(nippleDetail && !jacketLayerVisible && !armorCoversBreasts) {
+            var nipple = side.isLeft ? lNipple : rNipple;
+            collector.order(2).submitModel(new BreastModel(nipple), state, poseStack, type, state.lightCoords,
+                    overlay, color, null, state.outlineColor, null);
+        }
+
+        if(jacketLayerVisible) {
             poseStack.translate(0, 0, -0.015f);
             poseStack.scale(1.05f, 1.05f, 1.05f);
             var jacketModel = side.isLeft ? lBreastWear : rBreastWear;
-            collector.order(2).submitModel(new BreastModel(jacketModel), state, poseStack, type, state.lightCoords, overlay, color, null, state.outlineColor, null);
+            collector.order(3).submitModel(new BreastModel(jacketModel), state, poseStack, type, state.lightCoords, overlay, color, null, state.outlineColor, null);
         }
     }
 

@@ -23,6 +23,7 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.wildfire.main.WildfireHelper;
 import com.wildfire.main.config.Configuration;
+import com.wildfire.main.config.enums.BreastShape;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.world.entity.player.Player;
@@ -42,6 +43,7 @@ import org.joml.Vector3f;
  */
 public record BreastDataComponent(float breastSize, float cleavage, Vector3f offsets, boolean jacket,
                                   float width, float height, float projection, float balance,
+                                  BreastShape shape, boolean nipples, float nippleSize,
                                   @Nullable CustomData nbtComponent) {
 
     private static final String KEY = "WildfireGender";
@@ -75,10 +77,20 @@ public record BreastDataComponent(float breastSize, float cleavage, Vector3f off
                     .forGetter(BreastDataComponent::projection),
             WildfireHelper.boundedFloat(Configuration.BREASTS_BALANCE)
                     .optionalFieldOf("Balance", Configuration.BREASTS_BALANCE.getDefault())
-                    .forGetter(BreastDataComponent::balance)
-        ).apply(instance, (breastSize, cleavage, jacket, x, y, z, width, height, projection, balance) ->
+                    .forGetter(BreastDataComponent::balance),
+            BreastShape.CODEC
+                    .optionalFieldOf("Shape", Configuration.BREASTS_SHAPE.getDefault())
+                    .forGetter(BreastDataComponent::shape),
+            Codec.BOOL
+                    .optionalFieldOf("Nipples", Configuration.BREASTS_NIPPLES.getDefault())
+                    .forGetter(BreastDataComponent::nipples),
+            WildfireHelper.boundedFloat(Configuration.BREASTS_NIPPLE_SIZE)
+                    .optionalFieldOf("NippleSize", Configuration.BREASTS_NIPPLE_SIZE.getDefault())
+                    .forGetter(BreastDataComponent::nippleSize)
+        ).apply(instance, (breastSize, cleavage, jacket, x, y, z, width, height, projection, balance,
+                           shape, nipples, nippleSize) ->
                 new BreastDataComponent(breastSize, cleavage, new Vector3f(x, y, z), jacket,
-                        width, height, projection, balance, null))
+                        width, height, projection, balance, shape, nipples, nippleSize, null))
     );
 
     public static @Nullable BreastDataComponent fromPlayer(@NotNull Player player, @NotNull PlayerConfig config) {
@@ -89,7 +101,8 @@ public record BreastDataComponent(float breastSize, float cleavage, Vector3f off
         var breasts = config.getBreasts();
         return new BreastDataComponent(config.getBustSize(), breasts.getCleavage(), breasts.getOffsets(),
                 player.isModelPartShown(PlayerModelPart.JACKET), breasts.getWidth(), breasts.getHeight(),
-                breasts.getProjection(), breasts.getBalance(), null);
+                breasts.getProjection(), breasts.getBalance(), breasts.getShape(), breasts.hasNipples(),
+                breasts.getNippleSize(), null);
     }
 
     public static @Nullable BreastDataComponent fromComponent(@Nullable CustomData component) {
@@ -121,6 +134,7 @@ public record BreastDataComponent(float breastSize, float cleavage, Vector3f off
     }
 
     private BreastDataComponent withComponent(CustomData component) {
-        return new BreastDataComponent(breastSize, cleavage, offsets, jacket, width, height, projection, balance, component);
+        return new BreastDataComponent(breastSize, cleavage, offsets, jacket, width, height, projection, balance,
+                shape, nipples, nippleSize, component);
     }
 }

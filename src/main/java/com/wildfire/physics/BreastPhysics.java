@@ -52,6 +52,8 @@ public class BreastPhysics {
     private float bounceRotVel = 0, targetRotVel = 0, rotVelocity = 0, bounceRotation, preBounceRotation;
 
     private float breastSize = 0, preBreastSize = 0;
+    // Secondary soft-tissue response. Unlike positionY, this is a small, bounded deformation value.
+    private float wobble = 0, preWobble = 0, wobbleVelocity = 0, previousPrimaryDelta = 0;
 
     private @Nullable Pose lastPose;
     private int lastSwingDuration = 6, lastSwingTick = 0;
@@ -122,6 +124,7 @@ public class BreastPhysics {
         this.prePositionX = this.positionX;
         this.preBounceRotation = this.bounceRotation;
         this.preBreastSize = this.breastSize;
+        this.preWobble = this.wobble;
 
         if(this.prePos == null) {
             this.prePos = entity.position();
@@ -161,6 +164,7 @@ public class BreastPhysics {
         tickVehicle(entity, bounceIntensity, breastWeight);
         tickArmSwing(entity, bounceIntensity);
         finishTick();
+        tickWobble();
     }
 
     private void simplifiedTick(IGenderArmor armor) {
@@ -173,6 +177,41 @@ public class BreastPhysics {
             this.preBreastSize = this.breastSize;
         } else {
             this.preBreastSize = this.breastSize = 0f;
+        }
+        this.preWobble = this.wobble = this.wobbleVelocity = this.previousPrimaryDelta = 0f;
+    }
+
+    /**
+     * Advance a bounded secondary spring from the acceleration of the primary breast rig.
+     *
+     * <p>This intentionally deforms the model instead of adding more positional bounce. A semi-implicit,
+     * damped update keeps the result stable even at the editor's maximum dimensions and after frame stalls.</p>
+     */
+    private void tickWobble() {
+        boolean enabled = entityConfig.hasBreastPhysics() && entityConfig.hasWobble()
+                && entityConfig.getGender().canHaveBreasts();
+        float speed = Mth.clamp(entityConfig.getWobbleSpeed(), 0.5f, 2f);
+        float intensity = enabled ? Mth.clamp(entityConfig.getWobbleIntensity(), 0f, 1f) : 0f;
+
+        float primaryDelta = positionY - prePositionY;
+        float acceleration = Mth.clamp(primaryDelta - previousPrimaryDelta, -0.75f, 0.75f);
+        previousPrimaryDelta = primaryDelta;
+
+        // Size contributes with diminishing returns, preventing extreme editor values from destabilizing the rig.
+        float sizeResponse = (float) Math.tanh(Math.max(entityConfig.getBustSize(), 0f) * 0.8f);
+        float drive = -acceleration * intensity * (0.12f + sizeResponse * 0.16f);
+        float stiffness = 0.12f * speed * speed;
+        float damping = Mth.clamp(0.76f - (speed - 1f) * 0.055f, 0.68f, 0.82f);
+
+        wobbleVelocity += (drive - wobble) * stiffness;
+        wobbleVelocity *= damping;
+        wobble = Mth.clamp(wobble + wobbleVelocity, -0.22f, 0.22f);
+
+        if(!Float.isFinite(wobble) || !Float.isFinite(wobbleVelocity)) {
+            wobble = wobbleVelocity = previousPrimaryDelta = 0f;
+        }
+        if(!enabled && Math.abs(wobble) < 0.0005f && Math.abs(wobbleVelocity) < 0.0005f) {
+            wobble = wobbleVelocity = 0f;
         }
     }
 
@@ -372,6 +411,26 @@ public class BreastPhysics {
     }
     public float getPreBreastSize() {
         return this.preBreastSize;
+    }
+
+    public float getWobble() {
+        return wobble;
+    }
+
+    public float getPreWobble() {
+        return preWobble;
+    }
+
+    /**
+     * Adds a small, bounded impulse for the customization-screen motion preview.
+     */
+    public void addPreviewImpulse(float strength) {
+        if(!Float.isFinite(strength)) {
+            return;
+        }
+        float impulse = Mth.clamp(strength, -0.45f, 0.45f);
+        velocity = Mth.clamp(velocity + impulse, -0.7f, 0.7f);
+        wobbleVelocity = Mth.clamp(wobbleVelocity - impulse * 0.35f, -0.2f, 0.2f);
     }
 
     private int clampMovement(float movement) {

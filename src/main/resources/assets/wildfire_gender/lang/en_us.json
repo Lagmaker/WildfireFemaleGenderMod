@@ -62,6 +62,17 @@
     "wildfire_gender.breast_customization.tab_physics": "Breast Physics",
     "wildfire_gender.breast_customization.tab_miscellaneous": "Miscellaneous",
 
+    "wildfire_gender.shape.classic": "Classic",
+    "wildfire_gender.shape.round": "Round",
+    "wildfire_gender.shape.natural": "Natural",
+    "wildfire_gender.shape.teardrop": "Teardrop",
+    "wildfire_gender.shape.bell": "Bell",
+    "wildfire_gender.breast_customization.profile": "Profile: %s",
+    "wildfire_gender.tooltip.profile": "Cycles between genuinely different mesh profiles. Teardrop has a softer upper slope and fuller lower curve.",
+    "wildfire_gender.breast_customization.nipples": "Nipple Detail: %s",
+    "wildfire_gender.tooltip.nipples": "Adds subtle raised detail sampled from your skin texture. Hidden beneath jacket layers and covering armor.",
+    "wildfire_gender.slider.nipple_size": "Detail Size: %s%%",
+
     "wildfire_gender.breast_customization.presets.add_new": "Add New...",
     "wildfire_gender.breast_customization.presets.delete": "Delete",
     "wildfire_gender.presets.button": "Presets...",
@@ -74,6 +85,7 @@
     "wildfire_gender.presets.delete_warning": "Click Confirm Delete to remove this preset.",
     "wildfire_gender.presets.saved": "Saved “%s”",
     "wildfire_gender.presets.applied": "Applied “%s”",
+    "wildfire_gender.presets.applied_migrated": "Applied legacy preset “%s” with current defaults; saving it will use schema 2.",
     "wildfire_gender.presets.applied_version_warning": "Applied “%s” from a different compatible version.",
     "wildfire_gender.presets.deleted": "Deleted “%s”",
     "wildfire_gender.presets.name_required": "Enter a preset name.",
@@ -103,6 +115,7 @@
     "wildfire_gender.char_settings.physics": "Breast Physics: %s",
     "wildfire_gender.char_settings.jump": "Jump",
     "wildfire_gender.char_settings.jumping": "Stop Jumping",
+    "wildfire_gender.char_settings.preview_motion": "Preview Motion",
 
     "wildfire_gender.char_settings.override_armor_physics": "Armor Physics: %s",
     "wildfire_gender.tooltip.override_armor_physics.line1": "Breast physics will no longer be reduced/suppressed by any worn armor while enabled; this is primarily intended for use with resource packs that hide armor.",
@@ -113,7 +126,9 @@
     "wildfire_gender.char_settings.hurt_sounds": "Female Hurt Sounds: %s",
     "wildfire_gender.tooltip.hurt_sounds": "Your character will play a female hurt sound when taking damage if your gender is set to either Female or Other",
 
-    "wildfire_gender.breast_customization.dual_physics": "Dual-Physics: %s",
+    "wildfire_gender.breast_customization.dual_physics": "Independent: %s",
+    "wildfire_gender.breast_customization.wobble": "Wobble: %s",
+    "wildfire_gender.tooltip.wobble": "Adds a bounded secondary soft-motion response after movement. It deforms the profile without increasing positional bounce.",
 
     "wildfire_gender.label.gender": "Gender",
     "wildfire_gender.label.female": "Female",
@@ -132,6 +147,8 @@
 
     "wildfire_gender.slider.bounce": "Intensity: %s%%",
     "wildfire_gender.slider.floppy": "Momentum: %s%%",
+    "wildfire_gender.slider.wobble_intensity": "Wobble: %s%%",
+    "wildfire_gender.slider.wobble_speed": "Response: %s%%",
 
     "wildfire_gender.cancer_awareness.title": "Hey, it's Breast Cancer Awareness Month!",
 

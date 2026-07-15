@@ -1,3 +1,10 @@
+- Added five true geometry profiles: Classic, Round, Natural, Teardrop, and Bell
+- Added configurable, bounded soft wobble with intensity and response controls
+- Added opt-in nipple detail that samples the player skin and stays hidden under covering layers
+- Expanded the Shape editor with profile selection, precision controls, live motion preview, and reset support
+- Upgraded appearance presets to schema 2 with safe schema-1 migration and stable textual shape IDs
+- Updated direct multiplayer synchronization to protocol 3 for the new appearance and motion settings
+- Fixed editor slider increments so they are consistent across different value ranges
 - Added support for 26.2
 - Slightly tweaked how the breast model is rendered to improve compatibility with shaders and the Glowing effect
 - The breast model now follows the root model transformation, which should fix various issues with certain EMF resource packs

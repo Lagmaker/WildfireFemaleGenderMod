@@ -69,6 +69,9 @@ public class EntityConfig {
     protected boolean breastPhysics = Configuration.BREAST_PHYSICS.getDefault();
     protected float bounceMultiplier = Configuration.BOUNCE_MULTIPLIER.getDefault();
     protected float floppyMultiplier = Configuration.FLOPPY_MULTIPLIER.getDefault();
+    protected boolean wobble = Configuration.WOBBLE_ENABLED.getDefault();
+    protected float wobbleIntensity = Configuration.WOBBLE_INTENSITY.getDefault();
+    protected float wobbleSpeed = Configuration.WOBBLE_SPEED.getDefault();
 
     protected UVLayout leftBreastUVLayout = Configuration.LEFT_BREAST_UV_LAYOUT.getDefault();
     protected UVLayout rightBreastUVLayout = Configuration.RIGHT_BREAST_UV_LAYOUT.getDefault();
@@ -132,6 +135,9 @@ public class EntityConfig {
         breasts.updateHeight(fromComponent.height());
         breasts.updateProjection(fromComponent.projection());
         breasts.updateBalance(fromComponent.balance());
+        breasts.updateShape(fromComponent.shape());
+        breasts.updateNipples(fromComponent.nipples());
+        breasts.updateNippleSize(fromComponent.nippleSize());
         this.jacketLayer = fromComponent.jacket();
     }
 
@@ -196,6 +202,18 @@ public class EntityConfig {
 
     public float getFloppiness() {
         return this.floppyMultiplier;
+    }
+
+    public boolean hasWobble() {
+        return wobble;
+    }
+
+    public float getWobbleIntensity() {
+        return wobbleIntensity;
+    }
+
+    public float getWobbleSpeed() {
+        return wobbleSpeed;
     }
 
     public float getVoicePitch() {
@@ -289,6 +307,9 @@ public class EntityConfig {
         info.add("Offsets: (" + breasts.getXOffset() + ", " + breasts.getYOffset() + ", " + breasts.getZOffset() + ")");
         info.add("Shape: width=" + breasts.getWidth() + ", height=" + breasts.getHeight()
                 + ", projection=" + breasts.getProjection() + ", balance=" + breasts.getBalance());
+        info.add("Profile: " + breasts.getShape() + ", nipple detail=" + breasts.hasNipples());
+        info.add("Wobble: enabled=" + hasWobble() + ", intensity=" + getWobbleIntensity()
+                + ", speed=" + getWobbleSpeed());
 
         return info;
     }

@@ -10,6 +10,10 @@
 
 This mod adds extra customization options to the player model by adding breasts for a more feminine appearance.
 
+The expanded editor supports sizes up to 300%, independent width, height, projection and asymmetry controls,
+five generated geometry profiles (including Teardrop), optional skin-sampled nipple detail, and configurable
+secondary soft-motion wobble. Armor and jacket geometry follow the selected profile.
+
 This mod is primarily client-sided, but your settings will also be automatically synced with other connected players
 if the mod is also installed on the server.
 
@@ -25,8 +29,9 @@ H - Open Customization Settings
 
 Open **Character Personalization → Shape → Presets** to save and apply named appearance presets.
 Presets are portable JSON files stored in **config/FemaleGenderMod/presets**. Each file records its preset
-schema, mod version, and Minecraft version. Presets from another mod or Minecraft version can be applied
-when their schema is compatible; unsupported schemas are blocked.
+schema, mod version, and Minecraft version. Preset schema 1 is migrated safely to schema 2; presets from
+another mod or Minecraft version can be applied when their schema is compatible, while unsupported future
+schemas are blocked.
 
 ## License
 
@@ -59,8 +64,8 @@ No.
 <details>
 <summary>4) Any plans for additional breast models?</summary>
 
-~~Yeah, I might introduce more breast models down the line. It's on the to-do list but not a top priority. Suggestions for unique ideas are welcome, as long as they're original and don't overlap with other mods.~~
-This isn't planned anymore, though isn't entirely off the table.
+Five generated profiles are available now: Classic, Round, Natural, Teardrop, and Bell. Each profile changes
+the actual mesh silhouette, and armor layers follow it.
 
 </details>
 

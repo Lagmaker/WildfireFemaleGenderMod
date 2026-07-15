@@ -148,11 +148,14 @@ public class WildfirePresetScreen extends BaseWildfireScreen {
         if(selected == null) return;
         try {
             var compatibility = AppearancePreset.apply(selected, Objects.requireNonNull(getPlayer(), "getPlayer()"));
-            status = Component.translatable(compatibility == AppearancePreset.Compatibility.EXACT
-                            ? "wildfire_gender.presets.applied"
-                            : "wildfire_gender.presets.applied_version_warning",
-                    selected.name()).withStyle(compatibility == AppearancePreset.Compatibility.EXACT
-                    ? ChatFormatting.GREEN : ChatFormatting.YELLOW);
+            String statusKey = switch(compatibility) {
+                case EXACT -> "wildfire_gender.presets.applied";
+                case MIGRATABLE -> "wildfire_gender.presets.applied_migrated";
+                default -> "wildfire_gender.presets.applied_version_warning";
+            };
+            status = Component.translatable(statusKey, selected.name())
+                    .withStyle(compatibility == AppearancePreset.Compatibility.EXACT
+                            ? ChatFormatting.GREEN : ChatFormatting.YELLOW);
         } catch(AppearancePreset.IncompatiblePresetException e) {
             status = Component.translatable("wildfire_gender.presets.incompatible")
                     .withStyle(ChatFormatting.RED);

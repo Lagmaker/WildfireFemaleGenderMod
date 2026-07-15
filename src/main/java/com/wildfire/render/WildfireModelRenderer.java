@@ -38,21 +38,27 @@ public final class WildfireModelRenderer {
                                  int light, int overlay, int color) {
         Matrix4f matrix4f = entry.pose();
         Matrix3f matrix3f = entry.normal();
+        Vector3f transformedNormal = new Vector3f();
+        Vector4f transformedPosition = new Vector4f();
         for(var quad : model.quads) {
+            if(quad == null) continue;
 
             //Make sure UVs aren't set to zero. If they are, the textures screw up. Don't render the quad at all.
             if(quad.uvs[0] == 0.0F && quad.uvs[1] == 0.0F && quad.uvs[2] == 0.0F && quad.uvs[3] == 0.0F) continue;
 
-            Vector3f vector3f = new Vector3f(quad.normal.x(), quad.normal.y(), quad.normal.z()).mul(matrix3f);
-            float normalX = vector3f.x;
-            float normalY = vector3f.y;
-            float normalZ = vector3f.z;
+            transformedNormal.set(quad.normal).mul(matrix3f);
+            if(transformedNormal.lengthSquared() > 1.0E-8f) {
+                transformedNormal.normalize();
+            }
+            float normalX = transformedNormal.x;
+            float normalY = transformedNormal.y;
+            float normalZ = transformedNormal.z;
             for (var vertex : quad.vertexPositions) {
                 float j = vertex.x() / 16.0F;
                 float k = vertex.y() / 16.0F;
                 float l = vertex.z() / 16.0F;
-                Vector4f vector4f = new Vector4f(j, k, l, 1.0F).mul(matrix4f);
-                vertexConsumer.addVertex(vector4f.x(), vector4f.y(), vector4f.z(), color, vertex.u(), vertex.v(),
+                transformedPosition.set(j, k, l, 1.0F).mul(matrix4f);
+                vertexConsumer.addVertex(transformedPosition.x(), transformedPosition.y(), transformedPosition.z(), color, vertex.u(), vertex.v(),
                     overlay, light, normalX, normalY, normalZ);
             }
         }
@@ -69,7 +75,27 @@ public final class WildfireModelRenderer {
 
         protected final UVLayout dynamicUvLayouts;
 
-        protected ModelBox(int tW, int tH, float x, float y, float z, int dx, int dy, int dz, float delta, int quads, UVLayout dynamicUvLayouts) {
+        protected ModelBox(float x1, float y1, float z1, float x2, float y2, float z2,
+                           UVLayout dynamicUvLayouts, TexturedQuad[] quads) {
+            this.posX1 = x1;
+            this.posY1 = y1;
+            this.posZ1 = z1;
+            this.posX2 = x2;
+            this.posY2 = y2;
+            this.posZ2 = z2;
+            this.dynamicUvLayouts = dynamicUvLayouts;
+            this.quads = quads;
+        }
+
+        /**
+         * Retains the original integer-dimension constructor descriptor for external renderer extensions.
+         */
+        protected ModelBox(int tW, int tH, float x, float y, float z, int dx, int dy, int dz,
+                           float delta, int quads, UVLayout dynamicUvLayouts) {
+            this(tW, tH, x, y, z, (float) dx, (float) dy, (float) dz, delta, quads, dynamicUvLayouts);
+        }
+
+        protected ModelBox(int tW, int tH, float x, float y, float z, float dx, float dy, float dz, float delta, int quads, UVLayout dynamicUvLayouts) {
             this.posX1 = x;
             this.posY1 = y;
             this.posZ1 = z;
@@ -101,7 +127,7 @@ public final class WildfireModelRenderer {
             );
         }
 
-        protected void initQuads(int tW, int tH, int dx, int dy, int dz, int quads,
+        protected void initQuads(int tW, int tH, float dx, float dy, float dz, int quads,
                                  PositionTextureVertex vertex, PositionTextureVertex vertex1, PositionTextureVertex vertex2,
                                  PositionTextureVertex vertex3, PositionTextureVertex vertex4, PositionTextureVertex vertex5,
                                  PositionTextureVertex vertex6, PositionTextureVertex vertex7) {
@@ -114,22 +140,22 @@ public final class WildfireModelRenderer {
                     {vertex3, vertex4, vertex5, vertex6}	// SOUTH
             };
 
-            int i = 0;
             for(var entry : dynamicUvLayouts.getAllSides().entrySet()) {
                 UVDirection direction = entry.getKey();
                 UVQuad quad = entry.getValue();
                 if(quad == null) continue;
+                int faceIndex = direction.ordinal();
+                if(faceIndex >= this.quads.length) continue;
 
-                this.quads[i] = new TexturedQuad(
+                this.quads[faceIndex] = new TexturedQuad(
                         quad.x1(), quad.y1(), quad.x2(), quad.y2(),
                         tW, tH,
                         direction,
-                        faceVertices[i][0],
-                        faceVertices[i][1],
-                        faceVertices[i][2],
-                        faceVertices[i][3]
+                        faceVertices[faceIndex][0],
+                        faceVertices[faceIndex][1],
+                        faceVertices[faceIndex][2],
+                        faceVertices[faceIndex][3]
                 );
-                i++;
             }
         }
     }
@@ -142,6 +168,11 @@ public final class WildfireModelRenderer {
 
     public static class BreastModelBox extends ModelBox {
         public BreastModelBox(int tW, int tH, float x, float y, float z, int dx, int dy, int dz, float delta, UVLayout dynamicUvLayouts) {
+            super(tW, tH, x, y, z, dx, dy, dz, delta, 5, dynamicUvLayouts);
+        }
+
+        public BreastModelBox(int tW, int tH, float x, float y, float z, float dx, float dy, float dz,
+                              float delta, UVLayout dynamicUvLayouts) {
             super(tW, tH, x, y, z, dx, dy, dz, delta, 5, dynamicUvLayouts);
         }
     }
@@ -158,6 +189,16 @@ public final class WildfireModelRenderer {
         public final float[] uvs;
 
         public TexturedQuad(float u1, float v1, float u2, float v2, float texWidth, float texHeight, UVDirection directionIn, PositionTextureVertex... positionsIn) {
+            this(u1, v1, u2, v2, texWidth, texHeight, directionIn.getUnitVector(), positionsIn);
+        }
+
+        public TexturedQuad(float u1, float v1, float u2, float v2, float texWidth, float texHeight,
+                            PositionTextureVertex... positionsIn) {
+            this(u1, v1, u2, v2, texWidth, texHeight, calculateNormal(positionsIn), positionsIn);
+        }
+
+        private TexturedQuad(float u1, float v1, float u2, float v2, float texWidth, float texHeight,
+                             Vector3fc normal, PositionTextureVertex... positionsIn) {
             Preconditions.checkArgument(positionsIn.length == 4, "Incorrect number of vertices; expected 4, got %s", positionsIn.length);
 
             //Set UVs in array to reference in render side.
@@ -170,7 +211,21 @@ public final class WildfireModelRenderer {
             positionsIn[1] = positionsIn[1].withTexturePosition(u1 / texWidth + f, v1 / texHeight + f1);
             positionsIn[2] = positionsIn[2].withTexturePosition(u1 / texWidth + f, v2 / texHeight - f1);
             positionsIn[3] = positionsIn[3].withTexturePosition(u2 / texWidth - f, v2 / texHeight - f1);
-            this.normal = directionIn.getUnitVector();
+            this.normal = normal;
+        }
+
+        private static Vector3fc calculateNormal(PositionTextureVertex[] positions) {
+            Preconditions.checkArgument(positions.length >= 3, "At least three vertices are required");
+            var first = positions[0];
+            var second = positions[1];
+            var third = positions[2];
+            Vector3f edgeA = new Vector3f(second.x - first.x, second.y - first.y, second.z - first.z);
+            Vector3f edgeB = new Vector3f(third.x - first.x, third.y - first.y, third.z - first.z);
+            Vector3f normal = edgeA.cross(edgeB);
+            if(normal.lengthSquared() < 1.0E-6f) {
+                return new Vector3f(0, 0, -1);
+            }
+            return normal.normalize();
         }
     }
 }

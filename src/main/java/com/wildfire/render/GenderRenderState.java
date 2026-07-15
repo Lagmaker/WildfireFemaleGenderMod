@@ -22,6 +22,7 @@ import com.wildfire.api.IGenderArmor;
 import com.wildfire.main.WildfireGenderClient;
 import com.wildfire.main.WildfireHelper;
 import com.wildfire.main.config.enums.Gender;
+import com.wildfire.main.config.enums.BreastShape;
 import com.wildfire.main.entitydata.Breasts;
 import com.wildfire.main.entitydata.EntityConfig;
 import com.wildfire.main.entitydata.PlayerConfig;
@@ -71,6 +72,9 @@ public class GenderRenderState {
     public final boolean hasBreastPhysics;
     public final float bounceMultiplier;
     public final float floppyMultiplier;
+    public final boolean hasWobble;
+    public final float wobbleIntensity;
+    public final float wobbleSpeed;
     public final boolean armorPhysicsOverride;
     public final boolean showBreastsInArmor;
     public final boolean hasJacketLayer;
@@ -97,6 +101,9 @@ public class GenderRenderState {
         this.hasBreastPhysics = entityConfig.hasBreastPhysics();
         this.bounceMultiplier = entityConfig.getBounceMultiplier();
         this.floppyMultiplier = entityConfig.getFloppiness();
+        this.hasWobble = entityConfig.hasWobble();
+        this.wobbleIntensity = entityConfig.getWobbleIntensity();
+        this.wobbleSpeed = entityConfig.getWobbleSpeed();
         this.armorPhysicsOverride = entityConfig.getArmorPhysicsOverride();
         this.showBreastsInArmor = entityConfig.showBreastsInArmor();
 
@@ -133,6 +140,9 @@ public class GenderRenderState {
         public final float height;
         public final float projection;
         public final float balance;
+        public final BreastShape shape;
+        public final boolean nipples;
+        public final float nippleSize;
         public final boolean uniboob;
 
         private BreastState(Breasts breasts) {
@@ -144,6 +154,9 @@ public class GenderRenderState {
             this.height = breasts.getHeight();
             this.projection = breasts.getProjection();
             this.balance = breasts.getBalance();
+            this.shape = breasts.getShape();
+            this.nipples = breasts.hasNipples();
+            this.nippleSize = breasts.getNippleSize();
             this.uniboob = breasts.isUniboob();
         }
     }
@@ -153,6 +166,7 @@ public class GenderRenderState {
         private final float prePositionX, positionX;
         private final float preBounceRotation, bounceRotation;
         private final float preBreastSize, breastSize;
+        private final float preWobble, wobble;
 
         private BreastPhysicsState(BreastPhysics breastPhysics) {
             this.prePositionY = breastPhysics.getPrePositionY();
@@ -163,6 +177,8 @@ public class GenderRenderState {
             this.bounceRotation = breastPhysics.getBounceRotation();
             this.preBreastSize = breastPhysics.getPreBreastSize();
             this.breastSize = breastPhysics.getBreastSize();
+            this.preWobble = breastPhysics.getPreWobble();
+            this.wobble = breastPhysics.getWobble();
         }
 
         public float getPositionY() {
@@ -179,6 +195,10 @@ public class GenderRenderState {
 
         public float getBreastSize() {
             return Mth.lerp(partialTicks, this.preBreastSize, this.breastSize);
+        }
+
+        public float getWobble() {
+            return Mth.lerp(partialTicks, this.preWobble, this.wobble);
         }
     }
 }

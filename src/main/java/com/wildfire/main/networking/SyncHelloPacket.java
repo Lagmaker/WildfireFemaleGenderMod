@@ -39,7 +39,7 @@ import java.util.function.Function;
  * @since 5.0.0-Beta.2
  */
 public sealed interface SyncHelloPacket extends CustomPacketPayload {
-    /*static*/ int VERSION = 2;
+    /*static*/ int VERSION = 3;
 
     int version();
 
@@ -70,7 +70,7 @@ public sealed interface SyncHelloPacket extends CustomPacketPayload {
         public void handle(ClientPlayNetworking.Context context) {
             WildfireSync.LOGGER.info("Received hello response from server with protocol version {}", version);
             if(version != VERSION) {
-                WildfireSync.LOGGER.warn("Sync version mismatch; network errors will likely occur! (our sync version is {})", VERSION);
+                WildfireSync.LOGGER.warn("Sync version mismatch; direct mod sync is disabled by versioned packet channels (our sync version is {})", VERSION);
             }
         }
     }

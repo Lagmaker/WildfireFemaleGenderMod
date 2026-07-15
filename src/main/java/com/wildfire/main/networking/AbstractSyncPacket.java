@@ -86,18 +86,23 @@ abstract class AbstractSyncPacket {
         uvLayouts.applyTo(plr);
     }
 
-    protected record BreastPhysics(boolean physics, boolean showInArmor, float bounceMultiplier, float floppyMultiplier) {
+    protected record BreastPhysics(boolean physics, boolean showInArmor, float bounceMultiplier, float floppyMultiplier,
+                                   boolean wobble, float wobbleIntensity, float wobbleSpeed) {
 
         public static final StreamCodec<ByteBuf, BreastPhysics> CODEC = StreamCodec.composite(
                 ByteBufCodecs.BOOL, BreastPhysics::physics,
                 ByteBufCodecs.BOOL, BreastPhysics::showInArmor,
                 ByteBufCodecs.FLOAT, BreastPhysics::bounceMultiplier,
                 ByteBufCodecs.FLOAT, BreastPhysics::floppyMultiplier,
+                ByteBufCodecs.BOOL, BreastPhysics::wobble,
+                ByteBufCodecs.FLOAT, BreastPhysics::wobbleIntensity,
+                ByteBufCodecs.FLOAT, BreastPhysics::wobbleSpeed,
                 BreastPhysics::new
         );
 
         private BreastPhysics(PlayerConfig plr) {
-            this(plr.hasBreastPhysics(), plr.showBreastsInArmor(), plr.getBounceMultiplier(), plr.getFloppiness());
+            this(plr.hasBreastPhysics(), plr.showBreastsInArmor(), plr.getBounceMultiplier(), plr.getFloppiness(),
+                    plr.hasWobble(), plr.getWobbleIntensity(), plr.getWobbleSpeed());
         }
 
         private void applyTo(PlayerConfig plr) {
@@ -105,6 +110,9 @@ abstract class AbstractSyncPacket {
             plr.updateShowBreastsInArmor(showInArmor);
             plr.updateBounceMultiplier(bounceMultiplier);
             plr.updateFloppiness(floppyMultiplier);
+            plr.updateWobble(wobble);
+            plr.updateWobbleIntensity(wobbleIntensity);
+            plr.updateWobbleSpeed(wobbleSpeed);
         }
     }
 

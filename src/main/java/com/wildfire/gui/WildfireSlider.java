@@ -19,7 +19,6 @@
 package com.wildfire.gui;
 
 import com.mojang.blaze3d.platform.cursor.CursorTypes;
-import com.wildfire.main.WildfireHelper;
 import com.wildfire.main.config.types.FloatConfigKey;
 import it.unimi.dsi.fastutil.floats.Float2ObjectFunction;
 import it.unimi.dsi.fastutil.floats.FloatConsumer;
@@ -111,8 +110,9 @@ public class WildfireSlider extends AbstractWidget {
     public boolean keyPressed(KeyEvent event) {
         int keyCode = event.key();
         if(keyCode == GLFW.GLFW_KEY_LEFT || keyCode == GLFW.GLFW_KEY_RIGHT) {
-            value += (keyCode == GLFW.GLFW_KEY_LEFT ? -arrowKeyStep : arrowKeyStep);
-            value = WildfireHelper.snapToStep(Mth.clamp(value, 0, 1), arrowKeyStep);
+            double direction = keyCode == GLFW.GLFW_KEY_LEFT ? -1 : 1;
+            double actual = snapActualValue(getValue() + direction * arrowKeyStep, arrowKeyStep);
+            value = normalized(actual);
             applyValue();
             updateMessage();
             return true;
@@ -188,8 +188,9 @@ public class WildfireSlider extends AbstractWidget {
     }
 
     private void setValueInternal(double value) {
-        this.value = Mth.clamp((value - this.minValue) / (this.maxValue - this.minValue), 0, 1);
-        this.lastValue = (float) value;
+        double clamped = Mth.clamp(value, minValue, maxValue);
+        this.value = normalized(clamped);
+        this.lastValue = (float) clamped;
         updateMessage();
         //Note: Does not call applyValue
     }
@@ -211,12 +212,24 @@ public class WildfireSlider extends AbstractWidget {
         this.value = Mth.clamp(this.value, 0, 1);
 
         if (mouseStep > 0) {
-            double snapped = Math.round(this.value / mouseStep) * mouseStep;
-            this.value = Mth.clamp(snapped, 0, 1);
+            this.value = normalized(snapActualValue(getValue(), mouseStep));
         }
 
         applyValue();
         updateMessage();
+    }
+
+    private double normalized(double actualValue) {
+        return Mth.clamp((actualValue - minValue) / (maxValue - minValue), 0, 1);
+    }
+
+    private double snapActualValue(double actualValue, double step) {
+        double clamped = Mth.clamp(actualValue, minValue, maxValue);
+        if(step <= 0) {
+            return clamped;
+        }
+        double snapped = minValue + Math.round((clamped - minValue) / step) * step;
+        return Mth.clamp(snapped, minValue, maxValue);
     }
 
     @SuppressWarnings({"NotNullFieldNotInitialized", "UnusedReturnValue"})

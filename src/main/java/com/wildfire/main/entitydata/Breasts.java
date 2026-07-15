@@ -19,6 +19,7 @@
 package com.wildfire.main.entitydata;
 
 import com.wildfire.main.config.Configuration;
+import com.wildfire.main.config.enums.BreastShape;
 import com.wildfire.main.config.types.ConfigKey;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -43,7 +44,10 @@ public final class Breasts {
             ByteBufCodecs.FLOAT, Breasts::getHeight,
             ByteBufCodecs.FLOAT, Breasts::getProjection,
             ByteBufCodecs.FLOAT, Breasts::getBalance,
-            (x, y, z, uniboob, cleavage, width, height, projection, balance) -> {
+            BreastShape.STREAM_CODEC, Breasts::getShape,
+            ByteBufCodecs.BOOL, Breasts::hasNipples,
+            ByteBufCodecs.FLOAT, Breasts::getNippleSize,
+            (x, y, z, uniboob, cleavage, width, height, projection, balance, shape, nipples, nippleSize) -> {
                 Breasts breasts = new Breasts();
                 breasts.updateXOffset(x);
                 breasts.updateYOffset(y);
@@ -54,6 +58,9 @@ public final class Breasts {
                 breasts.updateHeight(height);
                 breasts.updateProjection(projection);
                 breasts.updateBalance(balance);
+                breasts.updateShape(shape);
+                breasts.updateNipples(nipples);
+                breasts.updateNippleSize(nippleSize);
                 return breasts;
             }
     );
@@ -66,6 +73,9 @@ public final class Breasts {
     private float height = Configuration.BREASTS_HEIGHT.getDefault();
     private float projection = Configuration.BREASTS_PROJECTION.getDefault();
     private float balance = Configuration.BREASTS_BALANCE.getDefault();
+    private BreastShape shape = Configuration.BREASTS_SHAPE.getDefault();
+    private boolean nipples = Configuration.BREASTS_NIPPLES.getDefault();
+    private float nippleSize = Configuration.BREASTS_NIPPLE_SIZE.getDefault();
     private boolean uniboob = Configuration.BREASTS_UNIBOOB.getDefault();
 
     private <VALUE> boolean updateValue(ConfigKey<VALUE> key, VALUE value, Consumer<VALUE> setter) {
@@ -190,11 +200,38 @@ public final class Breasts {
         return updateValue(Configuration.BREASTS_BALANCE, value, v -> this.balance = v);
     }
 
+    public BreastShape getShape() {
+        return shape;
+    }
+
+    public boolean updateShape(BreastShape value) {
+        return updateValue(Configuration.BREASTS_SHAPE, value, v -> this.shape = v);
+    }
+
+    public boolean hasNipples() {
+        return nipples;
+    }
+
+    public boolean updateNipples(boolean value) {
+        return updateValue(Configuration.BREASTS_NIPPLES, value, v -> this.nipples = v);
+    }
+
+    public float getNippleSize() {
+        return nippleSize;
+    }
+
+    public boolean updateNippleSize(float value) {
+        return updateValue(Configuration.BREASTS_NIPPLE_SIZE, value, v -> this.nippleSize = v);
+    }
+
     public void resetShape() {
         updateWidth(Configuration.BREASTS_WIDTH.getDefault());
         updateHeight(Configuration.BREASTS_HEIGHT.getDefault());
         updateProjection(Configuration.BREASTS_PROJECTION.getDefault());
         updateBalance(Configuration.BREASTS_BALANCE.getDefault());
+        updateShape(Configuration.BREASTS_SHAPE.getDefault());
+        updateNipples(Configuration.BREASTS_NIPPLES.getDefault());
+        updateNippleSize(Configuration.BREASTS_NIPPLE_SIZE.getDefault());
     }
 
     /**
@@ -226,5 +263,8 @@ public final class Breasts {
         updateHeight(breasts.height);
         updateProjection(breasts.projection);
         updateBalance(breasts.balance);
+        updateShape(breasts.shape);
+        updateNipples(breasts.nipples);
+        updateNippleSize(breasts.nippleSize);
     }
 }

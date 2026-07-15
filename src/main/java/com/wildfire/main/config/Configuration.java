@@ -20,6 +20,7 @@ package com.wildfire.main.config;
 
 import com.google.gson.JsonObject;
 import com.wildfire.main.config.enums.Gender;
+import com.wildfire.main.config.enums.BreastShape;
 import com.wildfire.main.config.functions.BreastGetter;
 import com.wildfire.main.config.functions.BreastSetter;
 import com.wildfire.main.config.functions.PlayerGetter;
@@ -55,11 +56,19 @@ public class Configuration extends AbstractConfiguration {
     public static final FloatConfigKey BREASTS_HEIGHT = new FloatConfigKey("breasts_height", 1F, 0.5F, 2F);
     public static final FloatConfigKey BREASTS_PROJECTION = new FloatConfigKey("breasts_projection", 1F, 0.5F, 2.5F);
     public static final FloatConfigKey BREASTS_BALANCE = new FloatConfigKey("breasts_balance", 0F, -0.4F, 0.4F);
+    public static final NamedEnumConfigKey<BreastShape> BREASTS_SHAPE =
+            new NamedEnumConfigKey<>("breasts_shape", BreastShape.CLASSIC, BreastShape::byName, BreastShape::id);
+    public static final BooleanConfigKey BREASTS_NIPPLES = new BooleanConfigKey("breasts_nipples", false);
+    public static final FloatConfigKey BREASTS_NIPPLE_SIZE =
+            new FloatConfigKey("breasts_nipple_size", 0.65F, 0.25F, 1.25F);
 
     public static final BooleanConfigKey BREAST_PHYSICS = new BooleanConfigKey("breast_physics", true);
     public static final BooleanConfigKey SHOW_IN_ARMOR = new BooleanConfigKey("show_in_armor", true);
     public static final FloatConfigKey BOUNCE_MULTIPLIER = new FloatConfigKey("bounce_multiplier", 0.333F, 0, 0.5f);
     public static final FloatConfigKey FLOPPY_MULTIPLIER = new FloatConfigKey("floppy_multiplier", 0.75F, 0.25f, 1);
+    public static final BooleanConfigKey WOBBLE_ENABLED = new BooleanConfigKey("wobble_enabled", true);
+    public static final FloatConfigKey WOBBLE_INTENSITY = new FloatConfigKey("wobble_intensity", 0.55F, 0F, 1F);
+    public static final FloatConfigKey WOBBLE_SPEED = new FloatConfigKey("wobble_speed", 1F, 0.5F, 2F);
 
     public static final BooleanConfigKey HOLIDAY_THEMES = new BooleanConfigKey("holiday_themes", true);
 
@@ -119,11 +128,17 @@ public class Configuration extends AbstractConfiguration {
             new RegisteredKey<>(BREASTS_HEIGHT, Breasts::getHeight, Breasts::updateHeight),
             new RegisteredKey<>(BREASTS_PROJECTION, Breasts::getProjection, Breasts::updateProjection),
             new RegisteredKey<>(BREASTS_BALANCE, Breasts::getBalance, Breasts::updateBalance),
+            new RegisteredKey<>(BREASTS_SHAPE, Breasts::getShape, Breasts::updateShape),
+            new RegisteredKey<>(BREASTS_NIPPLES, Breasts::hasNipples, Breasts::updateNipples),
+            new RegisteredKey<>(BREASTS_NIPPLE_SIZE, Breasts::getNippleSize, Breasts::updateNippleSize),
 
             new RegisteredKey<>(BREAST_PHYSICS, PlayerConfig::hasBreastPhysics, PlayerConfig::updateBreastPhysics),
             new RegisteredKey<>(SHOW_IN_ARMOR, PlayerConfig::showBreastsInArmor, PlayerConfig::updateShowBreastsInArmor),
             new RegisteredKey<>(BOUNCE_MULTIPLIER, PlayerConfig::getBounceMultiplier, PlayerConfig::updateBounceMultiplier),
             new RegisteredKey<>(FLOPPY_MULTIPLIER, PlayerConfig::getFloppiness, PlayerConfig::updateFloppiness),
+            new RegisteredKey<>(WOBBLE_ENABLED, PlayerConfig::hasWobble, PlayerConfig::updateWobble),
+            new RegisteredKey<>(WOBBLE_INTENSITY, PlayerConfig::getWobbleIntensity, PlayerConfig::updateWobbleIntensity),
+            new RegisteredKey<>(WOBBLE_SPEED, PlayerConfig::getWobbleSpeed, PlayerConfig::updateWobbleSpeed),
 
             new RegisteredKey<>(HOLIDAY_THEMES, PlayerConfig::hasHolidayThemes, PlayerConfig::updateHolidayThemes),
 

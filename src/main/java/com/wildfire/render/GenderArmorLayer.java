@@ -21,10 +21,11 @@ package com.wildfire.render;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.wildfire.api.IBreastArmorTexture;
 import com.wildfire.main.WildfireGender;
+import com.wildfire.main.config.enums.BreastShape;
 import com.wildfire.main.uvs.UVLayout;
 import com.wildfire.main.uvs.UVQuad;
 import com.wildfire.mixins.accessors.EquipmentLayerRendererAccessor;
-import com.wildfire.render.WildfireModelRenderer.BreastModelBox;
+import com.wildfire.render.WildfireModelRenderer.ModelBox;
 import com.wildfire.render.ducks.MissingTextureLogger;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -62,14 +63,15 @@ public class GenderArmorLayer<S extends HumanoidRenderState, M extends HumanoidM
 
     private final EquipmentLayerRenderer equipmentRenderer;
     private final EquipmentAssetManager equipmentModelLoader;
-    protected static final BreastModelBox lTrim, rTrim;
+    private static final UVLayout LEFT_TRIM_UV, RIGHT_TRIM_UV;
 
     @UnknownNullability("null until #resizeBox() is first called")
-    protected BreastModelBox lBoobArmor, rBoobArmor;
+    protected ModelBox lBoobArmor, rBoobArmor, lTrim, rTrim;
     @UnknownNullability("null until first render pass")
     private GenderRenderState genderRenderState;
 
     private IBreastArmorTexture textureData = IBreastArmorTexture.DEFAULT;
+    private BreastShape previousShape = BreastShape.CLASSIC;
 
     static {
         var left = new UVLayout(
@@ -88,8 +90,8 @@ public class GenderArmorLayer<S extends HumanoidRenderState, M extends HumanoidM
             new UVQuad(24, 21, 28, 26)   // NORTH
         );
 
-        lTrim = new BreastModelBox(64, 32, -4F, 0.0F, 0F, 4, 5, 3, 0, left);
-        rTrim = new BreastModelBox(64, 32, 0, 0.0F, 0F, 4, 5, 3, 0, right);
+        LEFT_TRIM_UV = left;
+        RIGHT_TRIM_UV = right;
     }
 
     private static boolean textureExists(Identifier texture) {
@@ -151,16 +153,20 @@ public class GenderArmorLayer<S extends HumanoidRenderState, M extends HumanoidM
 
     @Override
     protected void resizeBox(GenderRenderState state, float breastSize) {
-        if(lBoobArmor != null && rBoobArmor != null && Objects.equals(textureData, genderArmor.texture())) {
+        if(lBoobArmor != null && rBoobArmor != null && Objects.equals(textureData, genderArmor.texture())
+                && previousShape == state.breasts.shape) {
             return;
         }
 
         textureData = genderArmor.texture();
+        previousShape = state.breasts.shape;
         var texSize = textureData.textureSize();
         var uvs = textureData.uvs();
 
-        lBoobArmor = new BreastModelBox(texSize.x(), texSize.y(), -4F, 0.0F, 0F, 4, 5, 3, 0.0F, uvs.left());
-        rBoobArmor = new BreastModelBox(texSize.x(), texSize.y(), 0, 0.0F, 0F, 4, 5, 3, 0.0F, uvs.right());
+        lBoobArmor = createBreastModel(texSize.x(), texSize.y(), -4F, previousShape, uvs.left());
+        rBoobArmor = createBreastModel(texSize.x(), texSize.y(), 0F, previousShape, uvs.right());
+        lTrim = createBreastModel(64, 32, -4F, previousShape, LEFT_TRIM_UV);
+        rTrim = createBreastModel(64, 32, 0F, previousShape, RIGHT_TRIM_UV);
     }
 
     @Override

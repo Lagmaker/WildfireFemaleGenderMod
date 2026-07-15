@@ -35,7 +35,8 @@ import java.util.Locale;
  * Portable, versioned appearance presets stored in {@code config/FemaleGenderMod/presets}.
  */
 public final class AppearancePreset {
-    public static final int SCHEMA_VERSION = 1;
+    public static final int SCHEMA_VERSION = 2;
+    private static final int MIN_SUPPORTED_SCHEMA = 1;
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final List<ConfigKey<?>> APPEARANCE_KEYS = List.of(
@@ -49,6 +50,9 @@ public final class AppearancePreset {
             Configuration.BREASTS_HEIGHT,
             Configuration.BREASTS_PROJECTION,
             Configuration.BREASTS_BALANCE,
+            Configuration.BREASTS_SHAPE,
+            Configuration.BREASTS_NIPPLES,
+            Configuration.BREASTS_NIPPLE_SIZE,
             Configuration.LEFT_BREAST_UV_LAYOUT,
             Configuration.RIGHT_BREAST_UV_LAYOUT,
             Configuration.LEFT_BREAST_OVERLAY_UV_LAYOUT,
@@ -97,7 +101,7 @@ public final class AppearancePreset {
     public static Compatibility apply(Info info, PlayerConfig player) throws IOException {
         JsonObject root = readRoot(info.path);
         int schema = requiredInt(root, "schema_version");
-        if(schema != SCHEMA_VERSION) {
+        if(schema < MIN_SUPPORTED_SCHEMA || schema > SCHEMA_VERSION) {
             throw new IncompatiblePresetException(schema);
         }
 
@@ -107,6 +111,11 @@ public final class AppearancePreset {
         }
 
         Configuration config = player.getConfig();
+        // Applying a preset must not inherit values that happened to be active beforehand. This also
+        // gives schema-1 presets deterministic defaults for fields introduced by schema 2.
+        for(ConfigKey<?> key : APPEARANCE_KEYS) {
+            setDefault(config, key);
+        }
         for(ConfigKey<?> key : APPEARANCE_KEYS) {
             if(appearance.has(key.getKey())) {
                 loadKey(appearance, key, config);
@@ -180,8 +189,11 @@ public final class AppearancePreset {
         } catch(RuntimeException e) {
             return Compatibility.INVALID;
         }
-        if(schema != SCHEMA_VERSION) {
+        if(schema < MIN_SUPPORTED_SCHEMA || schema > SCHEMA_VERSION) {
             return Compatibility.INCOMPATIBLE_SCHEMA;
+        }
+        if(schema < SCHEMA_VERSION) {
+            return Compatibility.MIGRATABLE;
         }
 
         String sourceMod = optionalString(root, "source_mod_version", "unknown");
@@ -237,9 +249,14 @@ public final class AppearancePreset {
         config.set(key, key.read(input));
     }
 
+    private static <T> void setDefault(Configuration config, ConfigKey<T> key) {
+        config.set(key, key.getDefault());
+    }
+
     public enum Compatibility {
         EXACT,
         COMPATIBLE_DIFFERENT_VERSION,
+        MIGRATABLE,
         INCOMPATIBLE_SCHEMA,
         INVALID
     }
@@ -250,7 +267,8 @@ public final class AppearancePreset {
 
     public static final class IncompatiblePresetException extends IOException {
         public IncompatiblePresetException(int schema) {
-            super("Unsupported preset schema " + schema + " (expected " + SCHEMA_VERSION + ")");
+            super("Unsupported preset schema " + schema + " (supported " + MIN_SUPPORTED_SCHEMA
+                    + "-" + SCHEMA_VERSION + ")");
         }
     }
 }

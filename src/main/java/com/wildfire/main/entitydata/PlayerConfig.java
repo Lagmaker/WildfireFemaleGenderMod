@@ -158,6 +158,18 @@ public class PlayerConfig extends EntityConfig {
         return updateValue(Configuration.FLOPPY_MULTIPLIER, value, v -> this.floppyMultiplier = v);
     }
 
+    public boolean updateWobble(boolean value) {
+        return updateValue(Configuration.WOBBLE_ENABLED, value, v -> this.wobble = v);
+    }
+
+    public boolean updateWobbleIntensity(float value) {
+        return updateValue(Configuration.WOBBLE_INTENSITY, value, v -> this.wobbleIntensity = v);
+    }
+
+    public boolean updateWobbleSpeed(float value) {
+        return updateValue(Configuration.WOBBLE_SPEED, value, v -> this.wobbleSpeed = v);
+    }
+
     public SyncStatus getSyncStatus() {
         return this.syncStatus;
     }
