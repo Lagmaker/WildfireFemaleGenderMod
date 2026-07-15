@@ -10,9 +10,11 @@
 
 This mod adds extra customization options to the player model by adding breasts for a more feminine appearance.
 
-The expanded editor supports sizes up to 300%, independent width, height, projection and asymmetry controls,
-five generated geometry profiles (including Teardrop), optional skin-sampled nipple detail, and configurable
-secondary soft-motion wobble. Armor and jacket geometry follow the selected profile.
+The five-part appearance editor supports expansion from subtle proportions through 13.33× the default, with independent
+root span, end fullness, width, height, projection, balance, placement, and lift/drop controls. Six generated
+profiles include Anime Volume and Teardrop; optional skin-sampled nipple detail and a deterministic secondary-motion
+rig complete the editor. Auto-fit Front, ¾, and Side previews make even extreme proportions editable. Skin, jacket,
+armor, trim, and glint geometry all follow the selected silhouette.
 
 This mod is primarily client-sided, but your settings will also be automatically synced with other connected players
 if the mod is also installed on the server.
@@ -27,9 +29,9 @@ H - Open Customization Settings
 
 ## Appearance Presets
 
-Open **Character Personalization → Shape → Presets** to save and apply named appearance presets.
+Open **Character Personalization → Placement → Presets** to save and apply named appearance presets.
 Presets are portable JSON files stored in **config/FemaleGenderMod/presets**. Each file records its preset
-schema, mod version, and Minecraft version. Preset schema 1 is migrated safely to schema 2; presets from
+schema, mod version, and Minecraft version. Preset schemas 1 and 2 migrate safely to schema 3; presets from
 another mod or Minecraft version can be applied when their schema is compatible, while unsupported future
 schemas are blocked.
 
@@ -64,16 +66,16 @@ No.
 <details>
 <summary>4) Any plans for additional breast models?</summary>
 
-Five generated profiles are available now: Classic, Round, Natural, Teardrop, and Bell. Each profile changes
-the actual mesh silhouette, and armor layers follow it.
+Six generated profiles are available now: Classic, Anime Volume, Round, Natural, Teardrop, and Bell. Each profile
+changes the actual broad-root mesh silhouette, and armor layers follow it.
 
 </details>
 
 <details>
 <summary>5) Can we have larger breasts?</summary>
 
-Yes. The expanded appearance editor supports sizes up to 300%, independent width, height and fullness,
-and optional left/right asymmetry.
+Yes. Overall expansion reaches 13.33× the default value, with additional permissive controls for root span,
+end fullness, width, height, projection, placement, lift/drop, and optional left/right asymmetry.
 
 </details>
 

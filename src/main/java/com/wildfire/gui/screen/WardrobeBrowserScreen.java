@@ -119,6 +119,17 @@ public class WardrobeBrowserScreen extends BaseWildfireScreen {
                 })
                 .active(plr.getGender().canHaveBreasts()));
 
+        addButton(builder -> builder
+                .message(() -> Component.translatable("wildfire_gender.general_settings.open").append("..."))
+                .position(this.width / 2 - 36, this.height / 2 - 39)
+                .size(157, 20)
+                .onPress(_ -> {
+                    //~ if >=26.2 'setScreen' -> 'gui.setScreen'
+                    client.gui.setScreen(new WildfireGeneralSettingsScreen(
+                            WardrobeBrowserScreen.this, this.playerUUID));
+                })
+                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.general_settings.open.tooltip"))));
+
         addButton(builder -> {
             builder.message(() -> Component.translatable("wildfire_gender.cloud_settings"));
             builder.position(this.width / 2 - 36, y + 30);

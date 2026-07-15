@@ -24,9 +24,10 @@ import com.wildfire.main.WildfireGender;
 import com.wildfire.main.WildfireHelper;
 import com.wildfire.main.config.ClientConfig;
 import com.wildfire.main.config.enums.BreastShape;
+import com.wildfire.main.uvs.UVDirection;
 import com.wildfire.main.uvs.UVLayout;
+import com.wildfire.main.uvs.UVQuad;
 import com.wildfire.mixins.accessors.LivingEntityRendererAccessor;
-import com.wildfire.render.WildfireModelRenderer.BreastModelBox;
 import com.wildfire.render.WildfireModelRenderer.ModelBox;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -45,7 +46,8 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.UnknownNullability;
 import org.joml.Quaternionf;
 
-import java.util.Objects;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.function.Consumer;
 
 // TODO split this into an AbstractGenderLayer?
@@ -61,10 +63,8 @@ public class GenderLayer<S extends HumanoidRenderState, M extends HumanoidModel<
     @UnknownNullability("null until #resizeBox() is first called")
     private ModelBox lNipple, rNipple;
 
-    private @Nullable UVLayout prevLeftBreastUVLayout, prevRightBreastUVLayout,
-        prevLeftBreastOverlayUVLayout, prevRightBreastOverlayUVLayout;
-    private @Nullable BreastShape previousShape;
-    private float previousNippleSize = Float.NaN;
+    private static final int GEOMETRY_CACHE_SIZE = 24;
+    private final Map<GeometryKey, GeometryBundle> geometryCache = boundedCache(GEOMETRY_CACHE_SIZE);
 
     private final RenderLayerParent<S, M> context;
 
@@ -75,7 +75,7 @@ public class GenderLayer<S extends HumanoidRenderState, M extends HumanoidModel<
     protected boolean isChestplateOccupied, armorCoversBreasts, bounceEnabled, wobbleEnabled,
             breathingAnimation, jacketLayerVisible, nippleDetail;
     protected float breastOffsetX, breastOffsetY, breastOffsetZ, lPhysPositionY, lPhysPositionX, rPhysPositionY, rPhysPositionX,
-            lPhysBounceRotation, rPhysBounceRotation, breastSize, zOffset, outwardAngle,
+            lPhysBounceRotation, rPhysBounceRotation, outwardAngle,
             shapeWidth, shapeHeight, shapeProjection, shapeBalance, lPhysWobble, rPhysWobble;
 
     public GenderLayer(RenderLayerParent<S, M> render) {
@@ -155,9 +155,9 @@ public class GenderLayer<S extends HumanoidRenderState, M extends HumanoidModel<
         isUniboob = breasts.uniboob;
 
         GenderRenderState.BreastPhysicsState leftPhysicsState = genderState.leftBreastPhysics;
-        final float bSize = leftPhysicsState.getBreastSize();
-        outwardAngle = Math.round(breasts.cleavage * 100f);
-        outwardAngle = Math.min(outwardAngle, 10);
+        final float bSize = safeFinite(leftPhysicsState.getBreastSize(), 0f, 0f, 8f);
+        if(bSize < 0.02f) return false;
+        outwardAngle = safeFinite(breasts.cleavage * 100f, 0f, -75f, 75f);
 
         resizeBox(genderState, bSize);
 
@@ -178,19 +178,6 @@ public class GenderLayer<S extends HumanoidRenderState, M extends HumanoidModel<
             rPhysWobble = rightPhysicsState.getWobble();
         }
 
-        breastSize = Math.min(bSize * 1.5f, 0.7f); // Limit the max size to 0.7f
-
-        if (bSize > 0.7f) {
-            breastSize = bSize; // If bSize exceeds 0.7f, use bSize
-        }
-
-        if (breastSize < 0.02f) {
-            return false; // Return false if breastSize is too small
-        }
-
-        zOffset = 0.0625f - (bSize * 0.0625f); // Calculate zOffset
-        breastSize += 0.5f * Math.abs(bSize - 0.7f) * 2f; // Adjust breastSize based on bSize
-
         float resistance = Mth.clamp(genderArmor.physicsResistance(), 0, 1);
         breathingAnimation = ((genderState.armorPhysicsOverride || resistance <= 0.5F) && genderState.isBreathing);
         bounceEnabled = genderState.hasBreastPhysics && (!isChestplateOccupied || resistance < 1); //oh, you found this?
@@ -202,47 +189,97 @@ public class GenderLayer<S extends HumanoidRenderState, M extends HumanoidModel<
     }
 
     protected void resizeBox(GenderRenderState state, float breastSize) {
-        //TODO: Better way for this?
-        if(!Objects.equals(this.prevLeftBreastUVLayout, state.leftBreastUVLayout)
-                || !Objects.equals(this.prevRightBreastUVLayout, state.rightBreastUVLayout)
-                || !Objects.equals(this.prevLeftBreastOverlayUVLayout, state.leftBreastOverlayUVLayout)
-                || !Objects.equals(this.prevRightBreastOverlayUVLayout, state.rightBreastOverlayUVLayout)
-                || previousShape != state.breasts.shape
-                || Float.compare(previousNippleSize, state.breasts.nippleSize) != 0) {
+        float meshSize = geometryStep(breastSize);
+        float rootWidth = geometryStep(state.breasts.rootWidth);
+        float outerFullness = geometryStep(state.breasts.outerFullness);
+        float drop = geometryStep(state.breasts.drop);
+        float nippleSize = geometryStep(state.breasts.nippleSize);
+        var key = new GeometryKey(LayoutSnapshot.of(state.leftBreastUVLayout),
+                LayoutSnapshot.of(state.rightBreastUVLayout),
+                LayoutSnapshot.of(state.leftBreastOverlayUVLayout),
+                LayoutSnapshot.of(state.rightBreastOverlayUVLayout),
+                state.breasts.shape, meshSize, rootWidth, outerFullness, drop, nippleSize);
+        GeometryBundle models = geometryCache.computeIfAbsent(key, GenderLayer::createGeometry);
+        this.lBreast = models.left();
+        this.rBreast = models.right();
+        this.lBreastWear = models.leftOverlay();
+        this.rBreastWear = models.rightOverlay();
+        this.lNipple = models.leftDetail();
+        this.rNipple = models.rightDetail();
+    }
 
-            this.prevLeftBreastUVLayout = state.leftBreastUVLayout;
-            this.prevRightBreastUVLayout = state.rightBreastUVLayout;
-            this.prevLeftBreastOverlayUVLayout = state.leftBreastOverlayUVLayout;
-            this.prevRightBreastOverlayUVLayout = state.rightBreastOverlayUVLayout;
-            this.previousShape = state.breasts.shape;
-            this.previousNippleSize = state.breasts.nippleSize;
+    private static GeometryBundle createGeometry(GeometryKey key) {
+        ModelBox left = createBreastModel(64, 64, -4F, key.shape(), key.bustSize(),
+                key.rootWidth(), key.outerFullness(), key.drop(), key.leftUv().toLayout());
+        ModelBox right = createBreastModel(64, 64, 0F, key.shape(), key.bustSize(),
+                key.rootWidth(), key.outerFullness(), key.drop(), key.rightUv().toLayout());
+        ModelBox leftOverlay = createBreastModel(64, 64, -4F, key.shape(), key.bustSize(),
+                key.rootWidth(), key.outerFullness(), key.drop(), key.leftOverlayUv().toLayout());
+        ModelBox rightOverlay = createBreastModel(64, 64, 0F, key.shape(), key.bustSize(),
+                key.rootWidth(), key.outerFullness(), key.drop(), key.rightOverlayUv().toLayout());
+        ModelBox leftDetail = createNippleModel(-2F, key.shape(), key.bustSize(), key.rootWidth(),
+                key.outerFullness(), key.drop(), key.nippleSize(), key.leftUv().toLayout());
+        ModelBox rightDetail = createNippleModel(2F, key.shape(), key.bustSize(), key.rootWidth(),
+                key.outerFullness(), key.drop(), key.nippleSize(), key.rightUv().toLayout());
+        return new GeometryBundle(left, right, leftOverlay, rightOverlay, leftDetail, rightDetail);
+    }
 
-            this.lBreast = createBreastModel(64, 64, -4F, state.breasts.shape, state.leftBreastUVLayout);
-            this.rBreast = createBreastModel(64, 64, 0F, state.breasts.shape, state.rightBreastUVLayout);
-            this.lBreastWear = createBreastModel(64, 64, -4F, state.breasts.shape, state.leftBreastOverlayUVLayout);
-            this.rBreastWear = createBreastModel(64, 64, 0F, state.breasts.shape, state.rightBreastOverlayUVLayout);
-            this.lNipple = createNippleModel(-2F, state.breasts.shape, state.breasts.nippleSize,
-                    state.leftBreastUVLayout);
-            this.rNipple = createNippleModel(2F, state.breasts.shape, state.breasts.nippleSize,
-                    state.rightBreastUVLayout);
+    protected static <KEY, VALUE> Map<KEY, VALUE> boundedCache(int maximumSize) {
+        return new LinkedHashMap<>(maximumSize, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<KEY, VALUE> eldest) {
+                return size() > maximumSize;
+            }
+        };
+    }
+
+    protected record LayoutSnapshot(UVQuad east, UVQuad west, UVQuad down, UVQuad up, UVQuad north) {
+        protected static LayoutSnapshot of(UVLayout layout) {
+            return new LayoutSnapshot(layout.get(UVDirection.EAST), layout.get(UVDirection.WEST),
+                    layout.get(UVDirection.DOWN), layout.get(UVDirection.UP), layout.get(UVDirection.NORTH));
         }
+
+        protected UVLayout toLayout() {
+            return new UVLayout(east, west, down, up, north);
+        }
+    }
+
+    private record GeometryKey(LayoutSnapshot leftUv, LayoutSnapshot rightUv,
+                               LayoutSnapshot leftOverlayUv, LayoutSnapshot rightOverlayUv,
+                               BreastShape shape, float bustSize,
+                               float rootWidth, float outerFullness, float drop, float nippleSize) {
+    }
+
+    private record GeometryBundle(ModelBox left, ModelBox right, ModelBox leftOverlay,
+                                  ModelBox rightOverlay, ModelBox leftDetail, ModelBox rightDetail) {
     }
 
     protected static ModelBox createBreastModel(int textureWidth, int textureHeight, float x,
-                                                 BreastShape shape, UVLayout layout) {
-        if(shape == BreastShape.CLASSIC) {
-            return new BreastModelBox(textureWidth, textureHeight, x, 0, 0, 4, 5, 3, 0, layout);
-        }
-        return new ProfiledBreastModelBox(textureWidth, textureHeight, x, shape, layout);
+                                                 BreastShape shape, float bustSize, float rootWidth,
+                                                 float outerFullness, float drop, UVLayout layout) {
+        return new ProfiledBreastModelBox(textureWidth, textureHeight, x, shape, bustSize,
+                rootWidth, outerFullness, drop, layout);
     }
 
-    private static ModelBox createNippleModel(float centerX, BreastShape shape, float configuredSize,
-                                               UVLayout sourceLayout) {
+    private static ModelBox createNippleModel(float centerX, BreastShape shape, float bustSize,
+                                               float rootWidth, float outerFullness, float drop,
+                                               float configuredSize, UVLayout sourceLayout) {
         float size = 0.45f + configuredSize * 0.65f;
         float projection = 0.28f + configuredSize * 0.34f;
-        return new NippleDetailModelBox(64, 64, centerX, ProfiledBreastModelBox.nippleY(shape),
-                ProfiledBreastModelBox.nippleFrontZ(shape), size, projection,
-                ProfiledBreastModelBox.nippleSurfaceNormal(shape), sourceLayout);
+        var anchor = ProfiledBreastModelBox.detailAnchor(centerX, shape, bustSize, rootWidth,
+                outerFullness, drop);
+        return new NippleDetailModelBox(64, 64, anchor.x(), anchor.y(), anchor.z(), size,
+                projection, anchor.normal(), sourceLayout);
+    }
+
+    /** Quantization prevents rebuilding hundreds of vertices for sub-pixel interpolation noise. */
+    protected static float geometryStep(float value) {
+        if(!Float.isFinite(value)) return 0f;
+        return Math.round(value * 64f) / 64f;
+    }
+
+    private static float safeFinite(float value, float fallback, float min, float max) {
+        return Math.max(min, Math.min(max, Float.isFinite(value) ? value : fallback));
     }
 
     protected void setupTransformations(S state, M model, PoseStack matrixStack, BreastSide side) {
@@ -260,7 +297,11 @@ public class GenderLayer<S extends HumanoidRenderState, M extends HumanoidModel<
             matrixStack.translate(0, (side.isLeft ? lPhysPositionY : rPhysPositionY) / 32f, 0);
         }
 
-        matrixStack.translate((side.isLeft ? breastOffsetX : -breastOffsetX) * 0.0625f, 0.05625f + (breastOffsetY * 0.0625f), zOffset - 0.0625f * 2f + (breastOffsetZ * 0.0425f)); //shift down to correct position
+        // The mesh rear is z=3. Translating by five pixels places it directly on the body's
+        // z=-2 front plane, so projection grows forward without needing any size-driven pitch.
+        matrixStack.translate((side.isLeft ? breastOffsetX : -breastOffsetX) * 0.0625f,
+                0.05625f + (breastOffsetY * 0.0625f),
+                -0.3125f + (breastOffsetZ * 0.0625f));
 
         if(!isUniboob) {
             matrixStack.translate(-0.0625f * 2 * (side.isLeft ? 1 : -1), 0, 0);
@@ -272,22 +313,12 @@ public class GenderLayer<S extends HumanoidRenderState, M extends HumanoidModel<
             matrixStack.translate(0.0625f * 2 * (side.isLeft ? 1 : -1), 0, 0);
         }
 
-        float rotation = breastSize;
-        if(bounceEnabled) {
-            matrixStack.translate(0, -0.035f * breastSize, 0); //shift down to correct position
-            rotation -= (side.isLeft ? lPhysPositionY : rPhysPositionY) / 12f;
-        }
-
-        rotation = Math.min(rotation, breastSize + 0.2f);
-        rotation = Math.min(rotation, 1); //hard limit for MAX
-
         if(isChestplateOccupied) {
             matrixStack.translate(0, 0, 0.01f);
         }
 
         Quaternionf rotationTransform = new Quaternionf()
-                .rotationY((side.isLeft ? outwardAngle : -outwardAngle) * DEG_TO_RAD)
-                .rotateX(-35f * rotation * DEG_TO_RAD);
+                .rotationY((side.isLeft ? outwardAngle : -outwardAngle) * DEG_TO_RAD);
 
         if(breathingAnimation) {
             float f5 = -Mth.cos(state.ageInTicks * 0.09F) * 0.45F + 0.45F;
@@ -295,16 +326,34 @@ public class GenderLayer<S extends HumanoidRenderState, M extends HumanoidModel<
         }
 
         matrixStack.mulPose(rotationTransform);
-        float sideScale = 1f + (side.isLeft ? shapeBalance : -shapeBalance);
-        float wobble = bounceEnabled && wobbleEnabled ? (side.isLeft ? lPhysWobble : rPhysWobble) : 0f;
+        float sideScale = safeFinite(1f + (side.isLeft ? shapeBalance : -shapeBalance), 1f, .05f, 7f);
+        float wobble = bounceEnabled && wobbleEnabled
+                ? safeFinite(side.isLeft ? lPhysWobble : rPhysWobble, 0f, -.8f, .8f) : 0f;
         float widthWobble = 1f - wobble * 0.22f;
         float heightWobble = 1f + wobble * 0.42f;
         float projectionWobble = 1f - wobble * 0.34f;
+        // Clamp only the final render transform, not the saved editor values. The small epsilon keeps
+        // inverse-normal transforms finite when minimum width is combined with maximum asymmetry.
+        float widthScale = safeFinite(
+                safeFinite(shapeWidth, 1f, .05f, 7f) * sideScale * widthWobble * .9995f,
+                1f, .01f, 16f);
+        float heightScale = safeFinite(
+                safeFinite(shapeHeight, 1f, .05f, 7f) * sideScale * heightWobble,
+                1f, .01f, 16f);
+        float projectionScale = safeFinite(
+                safeFinite(shapeProjection, 1f, .05f, 9f) * sideScale * projectionWobble,
+                1f, .01f, 24f);
+
+        // Scale around the attachment center. This keeps the broad root planted while the outer
+        // volume deforms, including during secondary wobble.
+        float pivotX = (side.isLeft ? -2f : 2f) / 16f;
+        matrixStack.translate(pivotX, 2.5f / 16f, 3f / 16f);
         matrixStack.scale(
-                shapeWidth * sideScale * widthWobble * 0.9995f,
-                shapeHeight * sideScale * heightWobble,
-                shapeProjection * sideScale * projectionWobble
+                widthScale,
+                heightScale,
+                projectionScale
         );
+        matrixStack.translate(-pivotX, -2.5f / 16f, -3f / 16f);
     }
 
     private void renderBreast(S state, PoseStack poseStack, SubmitNodeCollector collector, int overlay, BreastSide side) {

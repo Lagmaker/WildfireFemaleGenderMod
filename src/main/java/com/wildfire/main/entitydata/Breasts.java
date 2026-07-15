@@ -40,24 +40,18 @@ public final class Breasts {
             ByteBufCodecs.FLOAT, Breasts::getZOffset,
             ByteBufCodecs.BOOL, Breasts::isUniboob,
             ByteBufCodecs.FLOAT, Breasts::getCleavage,
-            ByteBufCodecs.FLOAT, Breasts::getWidth,
-            ByteBufCodecs.FLOAT, Breasts::getHeight,
-            ByteBufCodecs.FLOAT, Breasts::getProjection,
-            ByteBufCodecs.FLOAT, Breasts::getBalance,
+            ShapeTuning.CODEC, Breasts::shapeTuning,
             BreastShape.STREAM_CODEC, Breasts::getShape,
             ByteBufCodecs.BOOL, Breasts::hasNipples,
             ByteBufCodecs.FLOAT, Breasts::getNippleSize,
-            (x, y, z, uniboob, cleavage, width, height, projection, balance, shape, nipples, nippleSize) -> {
+            (x, y, z, uniboob, cleavage, tuning, shape, nipples, nippleSize) -> {
                 Breasts breasts = new Breasts();
                 breasts.updateXOffset(x);
                 breasts.updateYOffset(y);
                 breasts.updateZOffset(z);
                 breasts.updateUniboob(uniboob);
                 breasts.updateCleavage(cleavage);
-                breasts.updateWidth(width);
-                breasts.updateHeight(height);
-                breasts.updateProjection(projection);
-                breasts.updateBalance(balance);
+                tuning.applyTo(breasts);
                 breasts.updateShape(shape);
                 breasts.updateNipples(nipples);
                 breasts.updateNippleSize(nippleSize);
@@ -73,6 +67,9 @@ public final class Breasts {
     private float height = Configuration.BREASTS_HEIGHT.getDefault();
     private float projection = Configuration.BREASTS_PROJECTION.getDefault();
     private float balance = Configuration.BREASTS_BALANCE.getDefault();
+    private float rootWidth = Configuration.BREASTS_ROOT_WIDTH.getDefault();
+    private float outerFullness = Configuration.BREASTS_OUTER_FULLNESS.getDefault();
+    private float drop = Configuration.BREASTS_DROP.getDefault();
     private BreastShape shape = Configuration.BREASTS_SHAPE.getDefault();
     private boolean nipples = Configuration.BREASTS_NIPPLES.getDefault();
     private float nippleSize = Configuration.BREASTS_NIPPLE_SIZE.getDefault();
@@ -115,11 +112,11 @@ public final class Breasts {
     }
 
     /**
-     * How far up or down the player's breasts should be rendered, also referred to as Height in the UI
+     * How far up or down the generated breast volume is placed on the torso.
      *
      * @implNote Negative values renders the breasts lower down, while positive values renders them higher up
      *
-     * @return  A {@code float} between {@code -1f} and {@code 1f}
+     * @return a value validated by {@link Configuration#BREASTS_OFFSET_Y}
      */
     public float getYOffset() {
         return yOffset;
@@ -133,9 +130,9 @@ public final class Breasts {
     }
 
     /**
-     * How far back the player's breasts should be rendered, also referred to as Depth in the UI
+     * How far forward or back the generated breast volume is placed on the torso.
      *
-     * @return  A {@code float} between {@code 0f} and {@code 1f}
+     * @return a value validated by {@link Configuration#BREASTS_OFFSET_Z}
      */
     public float getZOffset() {
         return zOffset;
@@ -149,9 +146,9 @@ public final class Breasts {
     }
 
     /**
-     * How much rotation outward there should be on each of the player's breasts
+     * Signed inward/outward angle applied independently from volume expansion.
      *
-     * @return  A {@code float} between {@code 0f} and {@code 0.1f}
+     * @return a value validated by {@link Configuration#BREASTS_CLEAVAGE}
      */
     public float getCleavage() {
         return cleavage;
@@ -200,6 +197,30 @@ public final class Breasts {
         return updateValue(Configuration.BREASTS_BALANCE, value, v -> this.balance = v);
     }
 
+    public float getRootWidth() {
+        return rootWidth;
+    }
+
+    public boolean updateRootWidth(float value) {
+        return updateValue(Configuration.BREASTS_ROOT_WIDTH, value, v -> this.rootWidth = v);
+    }
+
+    public float getOuterFullness() {
+        return outerFullness;
+    }
+
+    public boolean updateOuterFullness(float value) {
+        return updateValue(Configuration.BREASTS_OUTER_FULLNESS, value, v -> this.outerFullness = v);
+    }
+
+    public float getDrop() {
+        return drop;
+    }
+
+    public boolean updateDrop(float value) {
+        return updateValue(Configuration.BREASTS_DROP, value, v -> this.drop = v);
+    }
+
     public BreastShape getShape() {
         return shape;
     }
@@ -224,14 +245,35 @@ public final class Breasts {
         return updateValue(Configuration.BREASTS_NIPPLE_SIZE, value, v -> this.nippleSize = v);
     }
 
-    public void resetShape() {
+    public void resetVolume() {
         updateWidth(Configuration.BREASTS_WIDTH.getDefault());
         updateHeight(Configuration.BREASTS_HEIGHT.getDefault());
         updateProjection(Configuration.BREASTS_PROJECTION.getDefault());
         updateBalance(Configuration.BREASTS_BALANCE.getDefault());
+    }
+
+    public void resetShape() {
+        updateCleavage(Configuration.BREASTS_CLEAVAGE.getDefault());
+        updateRootWidth(Configuration.BREASTS_ROOT_WIDTH.getDefault());
+        updateOuterFullness(Configuration.BREASTS_OUTER_FULLNESS.getDefault());
+        updateDrop(Configuration.BREASTS_DROP.getDefault());
         updateShape(Configuration.BREASTS_SHAPE.getDefault());
-        updateNipples(Configuration.BREASTS_NIPPLES.getDefault());
-        updateNippleSize(Configuration.BREASTS_NIPPLE_SIZE.getDefault());
+    }
+
+    /**
+     * Compatibility reset for callers that treated expansion, placement, and silhouette as one panel.
+     */
+    public void resetExpansion() {
+        resetPlacement();
+        updateRootWidth(Configuration.BREASTS_ROOT_WIDTH.getDefault());
+        updateOuterFullness(Configuration.BREASTS_OUTER_FULLNESS.getDefault());
+        updateDrop(Configuration.BREASTS_DROP.getDefault());
+    }
+
+    public void resetPlacement() {
+        updateXOffset(Configuration.BREASTS_OFFSET_X.getDefault());
+        updateYOffset(Configuration.BREASTS_OFFSET_Y.getDefault());
+        updateZOffset(Configuration.BREASTS_OFFSET_Z.getDefault());
     }
 
     /**
@@ -263,8 +305,39 @@ public final class Breasts {
         updateHeight(breasts.height);
         updateProjection(breasts.projection);
         updateBalance(breasts.balance);
+        updateRootWidth(breasts.rootWidth);
+        updateOuterFullness(breasts.outerFullness);
+        updateDrop(breasts.drop);
         updateShape(breasts.shape);
         updateNipples(breasts.nipples);
         updateNippleSize(breasts.nippleSize);
+    }
+
+    private ShapeTuning shapeTuning() {
+        return new ShapeTuning(width, height, projection, balance, rootWidth, outerFullness, drop);
+    }
+
+    private record ShapeTuning(float width, float height, float projection, float balance,
+                               float rootWidth, float outerFullness, float drop) {
+        private static final StreamCodec<ByteBuf, ShapeTuning> CODEC = StreamCodec.composite(
+                ByteBufCodecs.FLOAT, ShapeTuning::width,
+                ByteBufCodecs.FLOAT, ShapeTuning::height,
+                ByteBufCodecs.FLOAT, ShapeTuning::projection,
+                ByteBufCodecs.FLOAT, ShapeTuning::balance,
+                ByteBufCodecs.FLOAT, ShapeTuning::rootWidth,
+                ByteBufCodecs.FLOAT, ShapeTuning::outerFullness,
+                ByteBufCodecs.FLOAT, ShapeTuning::drop,
+                ShapeTuning::new
+        );
+
+        private void applyTo(Breasts breasts) {
+            breasts.updateWidth(width);
+            breasts.updateHeight(height);
+            breasts.updateProjection(projection);
+            breasts.updateBalance(balance);
+            breasts.updateRootWidth(rootWidth);
+            breasts.updateOuterFullness(outerFullness);
+            breasts.updateDrop(drop);
+        }
     }
 }

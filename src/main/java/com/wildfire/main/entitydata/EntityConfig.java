@@ -99,8 +99,8 @@ public class EntityConfig {
     protected EntityConfig(UUID uuid) {
         this.uuid = uuid;
         this.breasts = new Breasts();
-        lBreastPhysics = new BreastPhysics(this);
-        rBreastPhysics = new BreastPhysics(this);
+        lBreastPhysics = new BreastPhysics(this, -0.22f);
+        rBreastPhysics = new BreastPhysics(this, 0.22f);
     }
 
     /**
@@ -135,6 +135,9 @@ public class EntityConfig {
         breasts.updateHeight(fromComponent.height());
         breasts.updateProjection(fromComponent.projection());
         breasts.updateBalance(fromComponent.balance());
+        breasts.updateRootWidth(fromComponent.rootWidth());
+        breasts.updateOuterFullness(fromComponent.outerFullness());
+        breasts.updateDrop(fromComponent.drop());
         breasts.updateShape(fromComponent.shape());
         breasts.updateNipples(fromComponent.nipples());
         breasts.updateNippleSize(fromComponent.nippleSize());
@@ -306,7 +309,9 @@ public class EntityConfig {
         info.add("Cleavage: " + breasts.getCleavage());
         info.add("Offsets: (" + breasts.getXOffset() + ", " + breasts.getYOffset() + ", " + breasts.getZOffset() + ")");
         info.add("Shape: width=" + breasts.getWidth() + ", height=" + breasts.getHeight()
-                + ", projection=" + breasts.getProjection() + ", balance=" + breasts.getBalance());
+                + ", projection=" + breasts.getProjection() + ", balance=" + breasts.getBalance()
+                + ", root=" + breasts.getRootWidth() + ", endFullness=" + breasts.getOuterFullness()
+                + ", drop=" + breasts.getDrop());
         info.add("Profile: " + breasts.getShape() + ", nipple detail=" + breasts.hasNipples());
         info.add("Wobble: enabled=" + hasWobble() + ", intensity=" + getWobbleIntensity()
                 + ", speed=" + getWobbleSpeed());

@@ -56,7 +56,7 @@ import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.apache.commons.lang3.mutable.MutableInt;
 import org.jetbrains.annotations.UnknownNullability;
 
-import java.util.Objects;
+import java.util.Map;
 
 @Environment(EnvType.CLIENT)
 public class GenderArmorLayer<S extends HumanoidRenderState, M extends HumanoidModel<S>> extends GenderLayer<S, M> {
@@ -70,8 +70,9 @@ public class GenderArmorLayer<S extends HumanoidRenderState, M extends HumanoidM
     @UnknownNullability("null until first render pass")
     private GenderRenderState genderRenderState;
 
-    private IBreastArmorTexture textureData = IBreastArmorTexture.DEFAULT;
-    private BreastShape previousShape = BreastShape.CLASSIC;
+    private static final int ARMOR_GEOMETRY_CACHE_SIZE = 16;
+    private final Map<ArmorGeometryKey, ArmorGeometryBundle> armorGeometryCache =
+            boundedCache(ARMOR_GEOMETRY_CACHE_SIZE);
 
     static {
         var left = new UVLayout(
@@ -153,20 +154,41 @@ public class GenderArmorLayer<S extends HumanoidRenderState, M extends HumanoidM
 
     @Override
     protected void resizeBox(GenderRenderState state, float breastSize) {
-        if(lBoobArmor != null && rBoobArmor != null && Objects.equals(textureData, genderArmor.texture())
-                && previousShape == state.breasts.shape) {
-            return;
-        }
-
-        textureData = genderArmor.texture();
-        previousShape = state.breasts.shape;
+        float meshSize = geometryStep(breastSize);
+        float rootWidth = geometryStep(state.breasts.rootWidth);
+        float outerFullness = geometryStep(state.breasts.outerFullness);
+        float drop = geometryStep(state.breasts.drop);
+        IBreastArmorTexture textureData = genderArmor.texture();
         var texSize = textureData.textureSize();
         var uvs = textureData.uvs();
+        var key = new ArmorGeometryKey(texSize.x(), texSize.y(), LayoutSnapshot.of(uvs.left()),
+                LayoutSnapshot.of(uvs.right()),
+                state.breasts.shape, meshSize, rootWidth, outerFullness, drop);
+        ArmorGeometryBundle models = armorGeometryCache.computeIfAbsent(key, GenderArmorLayer::createGeometry);
+        lBoobArmor = models.left();
+        rBoobArmor = models.right();
+        lTrim = models.leftTrim();
+        rTrim = models.rightTrim();
+    }
 
-        lBoobArmor = createBreastModel(texSize.x(), texSize.y(), -4F, previousShape, uvs.left());
-        rBoobArmor = createBreastModel(texSize.x(), texSize.y(), 0F, previousShape, uvs.right());
-        lTrim = createBreastModel(64, 32, -4F, previousShape, LEFT_TRIM_UV);
-        rTrim = createBreastModel(64, 32, 0F, previousShape, RIGHT_TRIM_UV);
+    private static ArmorGeometryBundle createGeometry(ArmorGeometryKey key) {
+        ModelBox left = createBreastModel(key.textureWidth(), key.textureHeight(), -4F, key.shape(),
+                key.bustSize(), key.rootWidth(), key.outerFullness(), key.drop(), key.leftUv().toLayout());
+        ModelBox right = createBreastModel(key.textureWidth(), key.textureHeight(), 0F, key.shape(),
+                key.bustSize(), key.rootWidth(), key.outerFullness(), key.drop(), key.rightUv().toLayout());
+        ModelBox leftTrim = createBreastModel(64, 32, -4F, key.shape(), key.bustSize(),
+                key.rootWidth(), key.outerFullness(), key.drop(), LEFT_TRIM_UV);
+        ModelBox rightTrim = createBreastModel(64, 32, 0F, key.shape(), key.bustSize(),
+                key.rootWidth(), key.outerFullness(), key.drop(), RIGHT_TRIM_UV);
+        return new ArmorGeometryBundle(left, right, leftTrim, rightTrim);
+    }
+
+    private record ArmorGeometryKey(int textureWidth, int textureHeight, LayoutSnapshot leftUv,
+                                    LayoutSnapshot rightUv, BreastShape shape, float bustSize,
+                                    float rootWidth, float outerFullness, float drop) {
+    }
+
+    private record ArmorGeometryBundle(ModelBox left, ModelBox right, ModelBox leftTrim, ModelBox rightTrim) {
     }
 
     @Override

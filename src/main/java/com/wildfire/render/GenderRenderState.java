@@ -140,6 +140,9 @@ public class GenderRenderState {
         public final float height;
         public final float projection;
         public final float balance;
+        public final float rootWidth;
+        public final float outerFullness;
+        public final float drop;
         public final BreastShape shape;
         public final boolean nipples;
         public final float nippleSize;
@@ -154,6 +157,9 @@ public class GenderRenderState {
             this.height = breasts.getHeight();
             this.projection = breasts.getProjection();
             this.balance = breasts.getBalance();
+            this.rootWidth = breasts.getRootWidth();
+            this.outerFullness = breasts.getOuterFullness();
+            this.drop = breasts.getDrop();
             this.shape = breasts.getShape();
             this.nipples = breasts.hasNipples();
             this.nippleSize = breasts.getNippleSize();

@@ -1,3 +1,17 @@
+- Rebuilt breast sizing as true nonlinear X/Y/Z mesh expansion rather than size-driven lift or pitch
+- Added the Anime Volume profile with a torso-wide root and a fuller, wider forward silhouette
+- Added Root Span, End Fullness, and independent Lift / Drop geometry controls
+- Replaced the legacy motion behavior with a deterministic, armor-aware four-spring secondary-motion rig
+- Expanded the editor to five focused tabs: Volume, Shape, Placement, Motion, and Details
+- Added automatic preview fitting, manual zoom, and Front / ¾ / Side inspection views
+- Raised expansion and shape limits substantially, with nonlinear slider tracks for precise normal and extreme values
+- Kept skin, jacket, armor, trim, glint, nipple detail, and UV behavior aligned to the generated profile mesh
+- Doubled radial mesh resolution and smoothed extreme root-span transitions at the torso
+- Added bounded multi-profile mesh caches to prevent cross-player rebuild and allocation churn
+- Added generated-geometry culling bounds so massive silhouettes remain visible at camera and distance boundaries
+- Hardened numeric input and the spring integrator against non-finite data and extreme armor damping
+- Upgraded appearance presets to schema 3 with safe schema-1/schema-2 migration
+- Updated direct multiplayer synchronization to protocol 4 for the expanded shape data
 - Added five true geometry profiles: Classic, Round, Natural, Teardrop, and Bell
 - Added configurable, bounded soft wobble with intensity and response controls
 - Added opt-in nipple detail that samples the player skin and stays hidden under covering layers

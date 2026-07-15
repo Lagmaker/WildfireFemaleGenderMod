@@ -43,6 +43,7 @@ import org.joml.Vector3f;
  */
 public record BreastDataComponent(float breastSize, float cleavage, Vector3f offsets, boolean jacket,
                                   float width, float height, float projection, float balance,
+                                  float rootWidth, float outerFullness, float drop,
                                   BreastShape shape, boolean nipples, float nippleSize,
                                   @Nullable CustomData nbtComponent) {
 
@@ -78,6 +79,15 @@ public record BreastDataComponent(float breastSize, float cleavage, Vector3f off
             WildfireHelper.boundedFloat(Configuration.BREASTS_BALANCE)
                     .optionalFieldOf("Balance", Configuration.BREASTS_BALANCE.getDefault())
                     .forGetter(BreastDataComponent::balance),
+            WildfireHelper.boundedFloat(Configuration.BREASTS_ROOT_WIDTH)
+                    .optionalFieldOf("RootWidth", Configuration.BREASTS_ROOT_WIDTH.getDefault())
+                    .forGetter(BreastDataComponent::rootWidth),
+            WildfireHelper.boundedFloat(Configuration.BREASTS_OUTER_FULLNESS)
+                    .optionalFieldOf("OuterFullness", Configuration.BREASTS_OUTER_FULLNESS.getDefault())
+                    .forGetter(BreastDataComponent::outerFullness),
+            WildfireHelper.boundedFloat(Configuration.BREASTS_DROP)
+                    .optionalFieldOf("Drop", Configuration.BREASTS_DROP.getDefault())
+                    .forGetter(BreastDataComponent::drop),
             BreastShape.CODEC
                     .optionalFieldOf("Shape", Configuration.BREASTS_SHAPE.getDefault())
                     .forGetter(BreastDataComponent::shape),
@@ -88,9 +98,11 @@ public record BreastDataComponent(float breastSize, float cleavage, Vector3f off
                     .optionalFieldOf("NippleSize", Configuration.BREASTS_NIPPLE_SIZE.getDefault())
                     .forGetter(BreastDataComponent::nippleSize)
         ).apply(instance, (breastSize, cleavage, jacket, x, y, z, width, height, projection, balance,
+                           rootWidth, outerFullness, drop,
                            shape, nipples, nippleSize) ->
                 new BreastDataComponent(breastSize, cleavage, new Vector3f(x, y, z), jacket,
-                        width, height, projection, balance, shape, nipples, nippleSize, null))
+                        width, height, projection, balance, rootWidth, outerFullness, drop,
+                        shape, nipples, nippleSize, null))
     );
 
     public static @Nullable BreastDataComponent fromPlayer(@NotNull Player player, @NotNull PlayerConfig config) {
@@ -101,7 +113,8 @@ public record BreastDataComponent(float breastSize, float cleavage, Vector3f off
         var breasts = config.getBreasts();
         return new BreastDataComponent(config.getBustSize(), breasts.getCleavage(), breasts.getOffsets(),
                 player.isModelPartShown(PlayerModelPart.JACKET), breasts.getWidth(), breasts.getHeight(),
-                breasts.getProjection(), breasts.getBalance(), breasts.getShape(), breasts.hasNipples(),
+                breasts.getProjection(), breasts.getBalance(), breasts.getRootWidth(), breasts.getOuterFullness(),
+                breasts.getDrop(), breasts.getShape(), breasts.hasNipples(),
                 breasts.getNippleSize(), null);
     }
 
@@ -135,6 +148,6 @@ public record BreastDataComponent(float breastSize, float cleavage, Vector3f off
 
     private BreastDataComponent withComponent(CustomData component) {
         return new BreastDataComponent(breastSize, cleavage, offsets, jacket, width, height, projection, balance,
-                shape, nipples, nippleSize, component);
+                rootWidth, outerFullness, drop, shape, nipples, nippleSize, component);
     }
 }

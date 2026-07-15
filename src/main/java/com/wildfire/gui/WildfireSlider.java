@@ -44,6 +44,8 @@ public class WildfireSlider extends AbstractWidget {
     private double value;
     private final double minValue;
     private final double maxValue;
+    private final double curve;
+    private final boolean centerZero;
     private final FloatConsumer valueUpdate;
     private final Float2ObjectFunction<Component> messageUpdate;
     private final FloatConsumer onSave;
@@ -55,11 +57,14 @@ public class WildfireSlider extends AbstractWidget {
     private double mouseStep = 0;
     private double arrowKeyStep = 0.05;
 
-    private WildfireSlider(int xPos, int yPos, int width, int height, double minVal, double maxVal, double currentVal, FloatConsumer valueUpdate,
+    private WildfireSlider(int xPos, int yPos, int width, int height, double minVal, double maxVal, double currentVal,
+                          double curve, boolean centerZero, FloatConsumer valueUpdate,
                           Float2ObjectFunction<Component> messageUpdate, FloatConsumer onSave) {
         super(xPos, yPos, width, height, Component.empty());
         this.minValue = minVal;
         this.maxValue = maxVal;
+        this.curve = curve > 0 && Double.isFinite(curve) ? curve : 1;
+        this.centerZero = centerZero && minVal < 0 && maxVal > 0;
         this.valueUpdate = valueUpdate;
         this.messageUpdate = messageUpdate;
         this.onSave = onSave;
@@ -179,7 +184,12 @@ public class WildfireSlider extends AbstractWidget {
     }
 
     public double getValue() {
-        return this.value * (maxValue - minValue) + minValue;
+        if(centerZero) {
+            return this.value <= 0.5
+                    ? minValue + (this.value * 2) * -minValue
+                    : ((this.value - 0.5) * 2) * maxValue;
+        }
+        return Math.pow(this.value, curve) * (maxValue - minValue) + minValue;
     }
 
     public void setValue(double value) {
@@ -220,7 +230,14 @@ public class WildfireSlider extends AbstractWidget {
     }
 
     private double normalized(double actualValue) {
-        return Mth.clamp((actualValue - minValue) / (maxValue - minValue), 0, 1);
+        if(centerZero) {
+            double clamped = Mth.clamp(actualValue, minValue, maxValue);
+            return clamped <= 0
+                    ? 0.5 * (clamped - minValue) / -minValue
+                    : 0.5 + 0.5 * clamped / maxValue;
+        }
+        double linear = Mth.clamp((actualValue - minValue) / (maxValue - minValue), 0, 1);
+        return Math.pow(linear, 1 / curve);
     }
 
     private double snapActualValue(double actualValue, double step) {
@@ -239,6 +256,8 @@ public class WildfireSlider extends AbstractWidget {
         private double value;
         private @Nullable Double step = null;
         private @Nullable Double mouseStep = null;
+        private double curve = 1;
+        private boolean centerZero;
         private boolean active = true;
         private @Nullable Tooltip tooltip;
         private Float2ObjectFunction<Component> messageSupplier;
@@ -306,8 +325,26 @@ public class WildfireSlider extends AbstractWidget {
             return this;
         }
 
+        /**
+         * Shapes the track without changing the saved range. Values above one give more precision near minimum.
+         */
+        public Builder curve(double curve) {
+            this.curve = curve;
+            return this;
+        }
+
+        /**
+         * Places the neutral value at the middle of a signed track even when its two limits differ.
+         * Each side remains linear in actual units, so zero is easy to find without reducing the saved range.
+         */
+        public Builder centerZero() {
+            this.centerZero = true;
+            return this;
+        }
+
         public WildfireSlider build() {
-            var built = new WildfireSlider(x, y, width, height, min, max, value, onUpdate, messageSupplier, onSave);
+            var built = new WildfireSlider(x, y, width, height, min, max, value, curve, centerZero,
+                    onUpdate, messageSupplier, onSave);
             built.active = active;
             built.setTooltip(tooltip);
             if(step != null) {

@@ -36,7 +36,7 @@ import java.util.UUID;
 
 public final class ServerboundSyncPacket extends AbstractSyncPacket implements CustomPacketPayload {
 
-    public static final Type<ServerboundSyncPacket> ID = new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath(WildfireGender.MODID, "send_gender_info_v3"));
+    public static final Type<ServerboundSyncPacket> ID = new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath(WildfireGender.MODID, "send_gender_info_v4"));
     public static final StreamCodec<ByteBuf, ServerboundSyncPacket> CODEC = codec(ServerboundSyncPacket::new);
 
     public ServerboundSyncPacket(PlayerConfig plr) {

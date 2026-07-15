@@ -18,7 +18,6 @@
 
 package com.wildfire.gui.screen;
 
-import com.wildfire.events.EntityHurtSoundEvent;
 import com.wildfire.gui.WildfireSlider;
 import com.wildfire.main.WildfireGender;
 import com.wildfire.main.config.ClientConfig;
@@ -32,12 +31,19 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.entity.state.EntityRenderState;
+import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.Pose;
 import org.jetbrains.annotations.UnknownNullability;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
+import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -53,11 +59,14 @@ public class WildfireBreastCustomizationScreen extends BaseWildfireScreen {
     private static final Identifier BACKGROUND_FEMALE = Identifier.fromNamespaceAndPath(WildfireGender.MODID, "textures/gui/breast_customization.png");
     private static final Identifier BACKGROUND_OTHER = Identifier.fromNamespaceAndPath(WildfireGender.MODID, "textures/gui/breast_customization_other.png");
 
-    private static final Identifier BACKGROUND_CUSTOMIZATION = Identifier.fromNamespaceAndPath(WildfireGender.MODID, "textures/gui/tabs/breast_customization_tab.png");
-    private static final Identifier BACKGROUND_PHYSICS = Identifier.fromNamespaceAndPath(WildfireGender.MODID, "textures/gui/tabs/breast_physics_tab.png");
     private static final Identifier BACKGROUND_MISC = Identifier.fromNamespaceAndPath(WildfireGender.MODID, "textures/gui/tabs/miscellaneous_tab.png");
 
-    private Tab currentTab = Tab.CUSTOMIZATION;
+    private static final float ENTITY_SCALE = 0.0625F;
+
+    private Tab currentTab = Tab.VOLUME;
+    private PreviewView previewView = PreviewView.FRONT;
+    private boolean previewAutoFit = true;
+    private float previewZoom = 1f;
 
     public WildfireBreastCustomizationScreen(Screen parent, UUID uuid) {
         super(Component.translatable("wildfire_gender.appearance_settings.title"), parent, uuid);
@@ -67,63 +76,163 @@ public class WildfireBreastCustomizationScreen extends BaseWildfireScreen {
     public void init() {
         int y = this.height / 2 - 11;
 
-        addButton(builder -> builder
-                .message(() -> Component.translatable("wildfire_gender.breast_customization.tab_customization"))
-                .position(this.width / 2 - 130, y - 52)
-                .size(62, 12)
-                .onPress(button -> {
-                    currentTab = Tab.CUSTOMIZATION;
-                    rebuildWidgets();
-                })
-                .active(currentTab != Tab.CUSTOMIZATION));
+        Tab[] tabs = Tab.values();
+        int nextTabX = this.width / 2 - 127;
+        for(Tab tab : tabs) {
+            int tabX = nextTabX;
+            addButton(builder -> builder
+                    .message(() -> Component.translatable(tab.translationKey))
+                    .position(tabX, y - 52)
+                    .size(tab.width, 14)
+                    .onPress(_ -> {
+                        currentTab = tab;
+                        rebuildWidgets();
+                    })
+                    .active(currentTab != tab));
+            nextTabX += tab.width + 3;
+        }
 
-        addButton(builder -> builder
-                .message(() -> Component.translatable("wildfire_gender.breast_customization.tab_shape"))
-                .position(this.width / 2 - 65, y - 52)
-                .size(62, 12)
-                .onPress(button -> {
-                    currentTab = Tab.SHAPE;
-                    rebuildWidgets();
-                })
-                .active(currentTab != Tab.SHAPE));
-
-        addButton(builder -> builder
-                .message(() -> Component.translatable("wildfire_gender.breast_customization.tab_physics"))
-                .position(this.width / 2, y - 52)
-                .size(62, 12)
-                .onPress(button -> {
-                    currentTab = Tab.PHYSICS;
-                    rebuildWidgets();
-                })
-                .active(currentTab != Tab.PHYSICS));
-
-        addButton(builder -> builder
-                .message(() -> Component.translatable("wildfire_gender.breast_customization.tab_miscellaneous"))
-                .position(this.width / 2 + 65, y - 52)
-                .size(62, 12)
-                .onPress(button -> {
-                    currentTab = Tab.MISC;
-                    rebuildWidgets();
-                })
-                .active(currentTab != Tab.MISC));
+        initPreviewControls();
 
         final int tabOffsetY = y - 3 - 21;
         switch(currentTab) {
-            case CUSTOMIZATION -> initCustomizationTab(tabOffsetY);
+            case VOLUME -> initVolumeTab(tabOffsetY);
             case SHAPE -> initShapeTab(tabOffsetY);
-            case PHYSICS -> initPhysicsTab(tabOffsetY);
-            case MISC -> initMiscTab(tabOffsetY);
+            case PLACEMENT -> initPlacementTab(tabOffsetY);
+            case MOTION -> initPhysicsTab(tabOffsetY);
+            case DETAILS -> initDetailsTab(tabOffsetY);
         }
 
+    }
+
+    private void initPreviewControls() {
+        int x = this.width / 2 - 134;
+        int viewY = this.height / 2 + 44;
+        for(PreviewView view : PreviewView.values()) {
+            addButton(builder -> builder
+                    .message(() -> Component.translatable(view.translationKey))
+                    .position(x + view.index * 31, viewY)
+                    .size(29, 13)
+                    .onPress(_ -> {
+                        previewView = view;
+                        rebuildWidgets();
+                    })
+                    .active(previewView != view)
+                    .tooltip(Tooltip.create(Component.translatable(view.tooltipKey))));
+        }
+
+        int zoomY = viewY + 15;
+        addButton(builder -> builder
+                .message(() -> Component.translatable("wildfire_gender.preview.zoom_out"))
+                .position(x, zoomY)
+                .size(22, 13)
+                .onPress(_ -> adjustPreviewZoom(false))
+                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.preview.zoom_out.tooltip"))));
+
+        addButton(builder -> builder
+                .message(() -> Component.translatable("wildfire_gender.preview.auto_fit"))
+                .position(x + 24, zoomY)
+                .size(43, 13)
+                .onPress(_ -> {
+                    previewAutoFit = true;
+                    rebuildWidgets();
+                })
+                .active(!previewAutoFit)
+                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.preview.auto_fit.tooltip"))));
+
+        addButton(builder -> builder
+                .message(() -> Component.translatable("wildfire_gender.preview.zoom_in"))
+                .position(x + 69, zoomY)
+                .size(22, 13)
+                .onPress(_ -> adjustPreviewZoom(true))
+                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.preview.zoom_in.tooltip"))));
+    }
+
+    private void adjustPreviewZoom(boolean zoomIn) {
+        float current = effectivePreviewZoom();
+        previewAutoFit = false;
+        previewZoom = clamp(current * (zoomIn ? 1.2f : 1f / 1.2f), 0.015f, 1.5f);
+        rebuildWidgets();
+    }
+
+    private void initVolumeTab(final int tabOffsetY) {
+        final var plr = Objects.requireNonNull(getPlayer(), "getPlayer()");
+        final var breasts = plr.getBreasts();
+
+        addSlider(builder -> builder
+                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.expansion",
+                        formatMultiplier(value / Configuration.BUST_SIZE.getDefault())))
+                .position(this.width / 2 - 36, tabOffsetY - 2)
+                .size(FULL_WIDTH, 20)
+                .range(Configuration.BUST_SIZE)
+                .current(plr.getBustSize())
+                .update(plr::updateBustSize)
+                .step(0.02)
+                .mouseStep(0.01)
+                .curve(2.4)
+                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.tooltip.expansion"))));
+
+        addSlider(builder -> builder
+                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.width", formatMultiplier(value)))
+                .position(this.width / 2 - 36, tabOffsetY + 22)
+                .size(HALF_WIDTH, 20)
+                .range(Configuration.BREASTS_WIDTH)
+                .current(breasts.getWidth())
+                .update(breasts::updateWidth)
+                .step(0.02)
+                .mouseStep(0.01)
+                .curve(1.8));
+
+        addSlider(builder -> builder
+                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.vertical_fullness", formatMultiplier(value)))
+                .position(this.width / 2 - 36 + HALF_WIDTH + 4, tabOffsetY + 22)
+                .size(HALF_WIDTH, 20)
+                .range(Configuration.BREASTS_HEIGHT)
+                .current(breasts.getHeight())
+                .update(breasts::updateHeight)
+                .step(0.02)
+                .mouseStep(0.01)
+                .curve(1.8));
+
+        addSlider(builder -> builder
+                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.projection", formatMultiplier(value)))
+                .position(this.width / 2 - 36, tabOffsetY + 46)
+                .size(HALF_WIDTH, 20)
+                .range(Configuration.BREASTS_PROJECTION)
+                .current(breasts.getProjection())
+                .update(breasts::updateProjection)
+                .step(0.02)
+                .mouseStep(0.01)
+                .curve(2));
+
+        addSlider(builder -> builder
+                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.balance", formatBalance(value)))
+                .position(this.width / 2 - 36 + HALF_WIDTH + 4, tabOffsetY + 46)
+                .size(HALF_WIDTH, 20)
+                .range(Configuration.BREASTS_BALANCE)
+                .current(breasts.getBalance())
+                .update(breasts::updateBalance)
+                .step(0.0125)
+                .mouseStep(0.0125)
+                .centerZero()
+                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.tooltip.balance"))));
+
+        addButton(builder -> builder
+                .message(() -> Component.translatable("wildfire_gender.breast_customization.reset_volume"))
+                .position(this.width / 2 - 36, tabOffsetY + 94)
+                .size(FULL_WIDTH, 20)
+                .onPress(_ -> {
+                    plr.updateBustSize(Configuration.BUST_SIZE.getDefault());
+                    breasts.resetVolume();
+                    plr.save();
+                    rebuildWidgets();
+                })
+                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.tooltip.reset_volume"))));
     }
 
     private void initShapeTab(final int tabOffsetY) {
         final var plr = Objects.requireNonNull(getPlayer(), "getPlayer()");
         final var breasts = plr.getBreasts();
-        final var ref = new Object() {
-            @UnknownNullability
-            AbstractWidget nippleSize;
-        };
 
         addButton(builder -> builder
                 .message(() -> Component.translatable("wildfire_gender.breast_customization.profile",
@@ -138,87 +247,64 @@ public class WildfireBreastCustomizationScreen extends BaseWildfireScreen {
                 .tooltip(Tooltip.create(Component.translatable("wildfire_gender.tooltip.profile"))));
 
         addSlider(builder -> builder
-                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.width", Math.round(value * 100)))
+                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.root_width",
+                        formatMultiplier(value)))
                 .position(this.width / 2 - 36, tabOffsetY + 22)
                 .size(HALF_WIDTH, 20)
-                .range(Configuration.BREASTS_WIDTH)
-                .current(breasts.getWidth())
-                .update(breasts::updateWidth)
-                .step(0.01)
-                .mouseStep(0.005));
+                .range(Configuration.BREASTS_ROOT_WIDTH)
+                .current(breasts.getRootWidth())
+                .update(breasts::updateRootWidth)
+                .step(0.02)
+                .mouseStep(0.01)
+                .curve(1.7)
+                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.tooltip.root_width"))));
 
         addSlider(builder -> builder
-                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.vertical_fullness", Math.round(value * 100)))
+                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.outer_fullness",
+                        formatMultiplier(value)))
                 .position(this.width / 2 - 36 + HALF_WIDTH + 4, tabOffsetY + 22)
                 .size(HALF_WIDTH, 20)
-                .range(Configuration.BREASTS_HEIGHT)
-                .current(breasts.getHeight())
-                .update(breasts::updateHeight)
-                .step(0.01)
-                .mouseStep(0.005));
+                .range(Configuration.BREASTS_OUTER_FULLNESS)
+                .current(breasts.getOuterFullness())
+                .update(breasts::updateOuterFullness)
+                .step(0.02)
+                .mouseStep(0.01)
+                .curve(1.9)
+                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.tooltip.outer_fullness"))));
 
         addSlider(builder -> builder
-                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.projection", Math.round(value * 100)))
+                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.drop", formatSigned(value)))
                 .position(this.width / 2 - 36, tabOffsetY + 46)
                 .size(HALF_WIDTH, 20)
-                .range(Configuration.BREASTS_PROJECTION)
-                .current(breasts.getProjection())
-                .update(breasts::updateProjection)
-                .step(0.01)
-                .mouseStep(0.005));
-
-        addSlider(builder -> builder
-                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.balance", formatBalance(value)))
-                .position(this.width / 2 - 36 + HALF_WIDTH + 4, tabOffsetY + 46)
-                .size(HALF_WIDTH, 20)
-                .range(Configuration.BREASTS_BALANCE)
-                .current(breasts.getBalance())
-                .update(breasts::updateBalance)
-                .step(0.0125)
-                .mouseStep(0.0125)
-                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.tooltip.balance"))));
-
-        addButton(builder -> builder
-                .message(() -> Component.translatable("wildfire_gender.breast_customization.nipples",
-                        breasts.hasNipples() ? ENABLED : DISABLED))
-                .position(this.width / 2 - 36, tabOffsetY + 70)
-                .size(HALF_WIDTH, 20)
-                .onPress(button -> {
-                    breasts.updateNipples(!breasts.hasNipples());
-                    plr.save();
-                    ref.nippleSize.active = breasts.hasNipples();
-                    button.updateMessage();
-                })
-                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.tooltip.nipples"))));
-
-        ref.nippleSize = addSlider(builder -> builder
-                .message(value -> Component.translatable("wildfire_gender.slider.nipple_size", Math.round(value * 100)))
-                .position(this.width / 2 - 36 + HALF_WIDTH + 4, tabOffsetY + 70)
-                .size(HALF_WIDTH, 20)
-                .range(Configuration.BREASTS_NIPPLE_SIZE)
-                .current(breasts.getNippleSize())
-                .update(breasts::updateNippleSize)
+                .range(Configuration.BREASTS_DROP)
+                .current(breasts.getDrop())
+                .update(breasts::updateDrop)
                 .step(0.05)
                 .mouseStep(0.025)
-                .active(breasts.hasNipples()));
+                .centerZero()
+                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.tooltip.drop"))));
+
+        addSlider(builder -> builder
+                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.angle",
+                        Math.round(value * 100)))
+                .position(this.width / 2 - 36 + HALF_WIDTH + 4, tabOffsetY + 46)
+                .size(HALF_WIDTH, 20)
+                .range(Configuration.BREASTS_CLEAVAGE)
+                .current(breasts.getCleavage())
+                .update(breasts::updateCleavage)
+                .step(0.01)
+                .mouseStep(0.005)
+                .centerZero()
+                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.tooltip.angle"))));
 
         addButton(builder -> builder
                 .message(() -> Component.translatable("wildfire_gender.breast_customization.reset_shape"))
                 .position(this.width / 2 - 36, tabOffsetY + 94)
-                .size(HALF_WIDTH, 20)
-                .onPress(button -> {
+                .size(FULL_WIDTH, 20)
+                .onPress(_ -> {
                     breasts.resetShape();
                     plr.save();
                     rebuildWidgets();
-                }));
-
-        addButton(builder -> builder
-                .message(() -> Component.translatable("wildfire_gender.presets.button"))
-                .position(this.width / 2 - 36 + HALF_WIDTH + 4, tabOffsetY + 94)
-                .size(HALF_WIDTH, 20)
-                .onPress(_ -> {
-                    //~ if >=26.2 'minecraft.setScreen' -> 'minecraft.gui.setScreen'
-                    minecraft.gui.setScreen(new WildfirePresetScreen(this, playerUUID));
                 }));
     }
 
@@ -233,66 +319,70 @@ public class WildfireBreastCustomizationScreen extends BaseWildfireScreen {
         );
     }
 
-    private void initCustomizationTab(final int tabOffsetY) {
+    private void initPlacementTab(final int tabOffsetY) {
         final var plr = Objects.requireNonNull(getPlayer(), "getPlayer()");
         final var breasts = plr.getBreasts();
 
         addSlider(builder -> builder
-                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.breast_size", Math.round(value * 1.25f * 100)))
+                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.separation", formatSigned(value)))
                 .position(this.width / 2 - 36, tabOffsetY - 2)
                 .size(FULL_WIDTH, 20)
-                .range(Configuration.BUST_SIZE)
-                .current(plr.getBustSize())
-                .update(plr::updateBustSize)
-                .step(0.01)
-                .mouseStep(0.001));
-
-        addSlider(builder -> builder
-                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.separation", Math.round((Math.round(value * 100f) / 100f) * 10)))
-                .position(this.width / 2 - 36, tabOffsetY + 22)
-                .size(HALF_WIDTH, 20)
                 .range(Configuration.BREASTS_OFFSET_X)
                 .current(breasts.getXOffset())
                 .update(breasts::updateXOffset)
-                .mouseStep(0.05));
+                .step(0.05)
+                .mouseStep(0.025)
+                .centerZero()
+                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.tooltip.separation"))));
 
         addSlider(builder -> builder
-                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.height", Math.round((Math.round(value * 100f) / 100f) * 10)))
-                .position(this.width / 2 - 36 + HALF_WIDTH + 4, tabOffsetY + 22)
+                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.position_y", formatSigned(value)))
+                .position(this.width / 2 - 36, tabOffsetY + 22)
                 .size(HALF_WIDTH, 20)
                 .range(Configuration.BREASTS_OFFSET_Y)
                 .current(breasts.getYOffset())
                 .update(breasts::updateYOffset)
-                .mouseStep(0.05));
+                .step(0.05)
+                .mouseStep(0.025)
+                .centerZero());
 
         addSlider(builder -> builder
-                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.depth", Math.round((Math.round(value * 100f) / 100f) * 10)))
-                .position(this.width / 2 - 36, tabOffsetY + 46)
+                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.position_z", formatSigned(value)))
+                .position(this.width / 2 - 36 + HALF_WIDTH + 4, tabOffsetY + 22)
                 .size(HALF_WIDTH, 20)
                 .range(Configuration.BREASTS_OFFSET_Z)
                 .current(breasts.getZOffset())
                 .update(breasts::updateZOffset)
-                .step(0.1)
-                .mouseStep(0.05));
-        addSlider(builder -> builder
-                .message(value -> Component.translatable("wildfire_gender.wardrobe.slider.rotation", Math.round((Math.round(value * 100f) / 100f) * 100)))
-                .position(this.width / 2 - 36 + HALF_WIDTH + 4, tabOffsetY + 46)
-                .size(HALF_WIDTH, 20)
-                .range(Configuration.BREASTS_CLEAVAGE)
-                .current(breasts.getCleavage())
-                .update(breasts::updateCleavage)
-                .step(0.01)
-                .mouseStep(0.01));
-
+                .step(0.05)
+                .mouseStep(0.025)
+                .centerZero());
 
         addButton(builder -> builder
-                .message(() -> Component.translatable("wildfire_gender.uv_editor"))
-                .position(this.width / 2 - 36, this.height / 2 + 43)
-                .size(120, 15)
-                .onPress(button -> {
-                    //~ if >=26.2 'minecraft.setScreen' -> 'minecraft.gui.setScreen'
-                    minecraft.gui.setScreen(new WildfireBreastUVEditorScreen(WildfireBreastCustomizationScreen.this, playerUUID));
+                .message(() -> Component.translatable("wildfire_gender.breast_customization.reset_placement"))
+                .position(this.width / 2 - 36, tabOffsetY + 94)
+                .size(HALF_WIDTH, 20)
+                .onPress(_ -> {
+                    breasts.resetPlacement();
+                    plr.save();
+                    rebuildWidgets();
                 }));
+
+        addButton(builder -> builder
+                .message(() -> Component.translatable("wildfire_gender.presets.button"))
+                .position(this.width / 2 - 36 + HALF_WIDTH + 4, tabOffsetY + 94)
+                .size(HALF_WIDTH, 20)
+                .onPress(_ -> {
+                    //~ if >=26.2 'minecraft.setScreen' -> 'minecraft.gui.setScreen'
+                    minecraft.gui.setScreen(new WildfirePresetScreen(this, playerUUID));
+                }));
+    }
+
+    private static String formatSigned(float value) {
+        return String.format(Locale.ROOT, "%+.2f", value);
+    }
+
+    private static String formatMultiplier(float value) {
+        return String.format(Locale.ROOT, "%.2f×", value);
     }
 
     private void initPhysicsTab(final int tabOffsetY) {
@@ -306,8 +396,8 @@ public class WildfireBreastCustomizationScreen extends BaseWildfireScreen {
 
         ref.previewMotion = addButton(builder -> builder
                 .message(() -> Component.translatable("wildfire_gender.char_settings.preview_motion"))
-                .position(this.width / 2 - 130, this.height / 2 + 65)
-                .size(80, 15)
+                .position(this.width / 2 - 36, tabOffsetY + 94)
+                .size(HALF_WIDTH, 20)
                 .onPress(_ -> {
                     plr.getLeftBreastPhysics().addPreviewImpulse(-0.34f);
                     plr.getRightBreastPhysics().addPreviewImpulse(-0.30f);
@@ -363,8 +453,8 @@ public class WildfireBreastCustomizationScreen extends BaseWildfireScreen {
                     var value = ClientConfig.INSTANCE.get(ClientConfig.ARMOR_PHYSICS_OVERRIDE);
                     return Component.translatable("wildfire_gender.char_settings.override_armor_physics", value ? ENABLED : DISABLED);
                 })
-                .position(this.width / 2 - 36, tabOffsetY + 94)
-                .size(FULL_WIDTH, 20)
+                .position(this.width / 2 - 36 + HALF_WIDTH + 4, tabOffsetY + 94)
+                .size(HALF_WIDTH, 20)
                 .onPress(button -> {
                     ClientConfig.INSTANCE.toggle(ClientConfig.ARMOR_PHYSICS_OVERRIDE);
                     ClientConfig.INSTANCE.save();
@@ -376,38 +466,50 @@ public class WildfireBreastCustomizationScreen extends BaseWildfireScreen {
                 .active(plr.hasBreastPhysics()));
 
         ref.bounceSlider = addSlider(builder -> builder
-                .message(value -> Component.translatable("wildfire_gender.slider.bounce", Math.round((3 * value) * 100)))
+                .message(value -> Component.translatable("wildfire_gender.slider.motion_range",
+                        formatMultiplier(value / Configuration.BOUNCE_MULTIPLIER.getDefault())))
                 .position(this.width / 2 - 36, tabOffsetY + 46)
                 .size(HALF_WIDTH, 20)
                 .range(Configuration.BOUNCE_MULTIPLIER)
                 .current(plr.getBounceMultiplier())
                 .update(plr::updateBounceMultiplier)
-                .step(0.005)
+                .step(0.02)
+                .mouseStep(0.01)
+                .curve(1.5)
+                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.tooltip.motion_multiplier")))
                 .active(plr.hasBreastPhysics()));
 
         ref.floppySlider = addSlider(builder -> builder
-                .message(value -> Component.translatable("wildfire_gender.slider.floppy", Math.round(value * 100)))
+                .message(value -> Component.translatable("wildfire_gender.slider.softness",
+                        formatMultiplier(value / Configuration.FLOPPY_MULTIPLIER.getDefault())))
                 .position(this.width / 2 - 36 + HALF_WIDTH + 4, tabOffsetY + 46)
                 .size(HALF_WIDTH, 20)
                 .range(Configuration.FLOPPY_MULTIPLIER)
                 .current(plr.getFloppiness())
                 .update(plr::updateFloppiness)
-                .step(0.01)
+                .step(0.02)
+                .mouseStep(0.01)
+                .curve(1.5)
+                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.tooltip.motion_multiplier")))
                 .active(plr.hasBreastPhysics()));
 
         ref.wobbleIntensity = addSlider(builder -> builder
-                .message(value -> Component.translatable("wildfire_gender.slider.wobble_intensity", Math.round(value * 100)))
+                .message(value -> Component.translatable("wildfire_gender.slider.wobble_intensity",
+                        formatMultiplier(value / Configuration.WOBBLE_INTENSITY.getDefault())))
                 .position(this.width / 2 - 36, tabOffsetY + 70)
                 .size(HALF_WIDTH, 20)
                 .range(Configuration.WOBBLE_INTENSITY)
                 .current(plr.getWobbleIntensity())
                 .update(plr::updateWobbleIntensity)
                 .step(0.05)
-                .mouseStep(0.01)
+                .mouseStep(0.025)
+                .curve(1.5)
+                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.tooltip.motion_multiplier")))
                 .active(plr.hasBreastPhysics() && plr.hasWobble()));
 
         ref.wobbleSpeed = addSlider(builder -> builder
-                .message(value -> Component.translatable("wildfire_gender.slider.wobble_speed", Math.round(value * 100)))
+                .message(value -> Component.translatable("wildfire_gender.slider.wobble_speed",
+                        formatMultiplier(value / Configuration.WOBBLE_SPEED.getDefault())))
                 .position(this.width / 2 - 36 + HALF_WIDTH + 4, tabOffsetY + 70)
                 .size(HALF_WIDTH, 20)
                 .range(Configuration.WOBBLE_SPEED)
@@ -415,48 +517,57 @@ public class WildfireBreastCustomizationScreen extends BaseWildfireScreen {
                 .update(plr::updateWobbleSpeed)
                 .step(0.05)
                 .mouseStep(0.025)
+                .curve(1.5)
+                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.tooltip.motion_multiplier")))
                 .active(plr.hasBreastPhysics() && plr.hasWobble()));
     }
 
-    private void initMiscTab(final int tabOffsetY) {
+    private void initDetailsTab(final int tabOffsetY) {
         final var plr = Objects.requireNonNull(getPlayer(), "getPlayer()");
+        final var breasts = plr.getBreasts();
         final var config = ClientConfig.INSTANCE;
         final var ref = new Object() {
             @UnknownNullability
-            AbstractWidget pitchSlider;
+            AbstractWidget nippleSize;
         };
 
         addButton(builder -> builder
-                .message(() -> Component.translatable("wildfire_gender.char_settings.hurt_sounds", plr.hasHurtSounds() ? ENABLED : DISABLED))
+                .message(() -> Component.translatable("wildfire_gender.breast_customization.nipples",
+                        breasts.hasNipples() ? ENABLED : DISABLED))
                 .position(this.width / 2 - 36, tabOffsetY - 2)
-                .size(FULL_WIDTH, 20)
+                .size(HALF_WIDTH, 20)
                 .onPress(button -> {
-                    plr.updateHurtSounds(!plr.hasHurtSounds());
+                    breasts.updateNipples(!breasts.hasNipples());
                     plr.save();
-                    ref.pitchSlider.active = plr.hasHurtSounds();
+                    ref.nippleSize.active = breasts.hasNipples();
                     button.updateMessage();
                 })
-                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.tooltip.hurt_sounds"))));
+                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.tooltip.nipples"))));
 
-        ref.pitchSlider = addSlider(builder -> builder
-                .message(value -> Component.translatable("wildfire_gender.slider.voice_pitch", Math.round(value * 100)))
-                .position(this.width / 2 - 36, tabOffsetY + 22)
+        ref.nippleSize = addSlider(builder -> builder
+                .message(value -> Component.translatable("wildfire_gender.slider.nipple_size", Math.round(value * 100)))
+                .position(this.width / 2 - 36 + HALF_WIDTH + 4, tabOffsetY - 2)
                 .size(HALF_WIDTH, 20)
-                .range(Configuration.VOICE_PITCH)
-                .current(plr.getVoicePitch())
-                .update(plr::updateVoicePitch)
-                .save(value -> {
-                    plr.save();
-                    var clientPlayer = Objects.requireNonNull(minecraft).player;
-                    if(clientPlayer != null) {
-                        EntityHurtSoundEvent.EVENT.invoker().onHurt(clientPlayer, clientPlayer.damageSources().generic());
-                    }
-                })
-                .step(0.01)
-                .active(plr.hasHurtSounds()));
+                .range(Configuration.BREASTS_NIPPLE_SIZE)
+                .current(breasts.getNippleSize())
+                .update(breasts::updateNippleSize)
+                .step(0.05)
+                .mouseStep(0.025)
+                .curve(1.5)
+                .active(breasts.hasNipples()));
 
         addButton(builder -> builder
-                .message(() -> Component.translatable("wildfire_gender.char_settings.hide_in_armor", plr.showBreastsInArmor() ? DISABLED : ENABLED))
+                .message(() -> Component.translatable("wildfire_gender.uv_editor"))
+                .position(this.width / 2 - 36, tabOffsetY + 22)
+                .size(FULL_WIDTH, 20)
+                .onPress(_ -> {
+                    //~ if >=26.2 'minecraft.setScreen' -> 'minecraft.gui.setScreen'
+                    minecraft.gui.setScreen(new WildfireBreastUVEditorScreen(this, playerUUID));
+                }));
+
+        addButton(builder -> builder
+                .message(() -> Component.translatable("wildfire_gender.char_settings.hide_in_armor",
+                        plr.showBreastsInArmor() ? DISABLED : ENABLED))
                 .position(this.width / 2 - 36, tabOffsetY + 46)
                 .size(FULL_WIDTH, 20)
                 .onPress(button -> {
@@ -466,7 +577,8 @@ public class WildfireBreastCustomizationScreen extends BaseWildfireScreen {
                 }));
 
         addButton(builder -> builder
-                .message(() -> Component.translatable("wildfire_gender.char_settings.show_armor_stat", config.get(ClientConfig.ARMOR_STAT) ? ENABLED : DISABLED))
+                .message(() -> Component.translatable("wildfire_gender.char_settings.show_armor_stat",
+                        config.get(ClientConfig.ARMOR_STAT) ? ENABLED : DISABLED))
                 .position(this.width / 2 - 36, tabOffsetY + 70)
                 .size(FULL_WIDTH, 20)
                 .onPress(button -> {
@@ -476,15 +588,15 @@ public class WildfireBreastCustomizationScreen extends BaseWildfireScreen {
                 }));
 
         addButton(builder -> builder
-                .message(() -> Component.translatable("wildfire_gender.misc.holiday_themes", plr.hasHolidayThemes() ? ENABLED : DISABLED))
+                .message(() -> Component.translatable("wildfire_gender.breast_customization.reset_details"))
                 .position(this.width / 2 - 36, tabOffsetY + 94)
                 .size(FULL_WIDTH, 20)
-                .onPress(button -> {
-                    plr.updateHolidayThemes(!plr.hasHolidayThemes());
+                .onPress(_ -> {
+                    breasts.updateNipples(Configuration.BREASTS_NIPPLES.getDefault());
+                    breasts.updateNippleSize(Configuration.BREASTS_NIPPLE_SIZE.getDefault());
                     plr.save();
-                    button.updateMessage();
-                })
-                .tooltip(Tooltip.create(Component.translatable("wildfire_gender.tooltip.holiday_themes.line1"))));
+                    rebuildWidgets();
+                }));
     }
 
     @Override
@@ -506,7 +618,102 @@ public class WildfireBreastCustomizationScreen extends BaseWildfireScreen {
         graphics.blit(RenderPipelines.GUI_TEXTURED, currentTab.background, (this.width) / 2 - 42, (this.height) / 2 - 43, 0, 0, 178, currentTab.backgroundHeight, 512, 512);
         graphics.text(font, getTitle(), (width / 2) - font.width(getTitle()) / 2, (height / 2) - 82, 0xFFFFFF, false);
 
-        renderPlayerInFrame(graphics, this.width / 2 - 90, this.height / 2 + 44, mouseX, mouseY);
+        renderBreastPreview(graphics, mouseY);
+    }
+
+    private void renderBreastPreview(GuiGraphicsExtractor graphics, int mouseY) {
+        var player = minecraft.player;
+        if(player == null) return;
+
+        int centerX = this.width / 2 - 89;
+        int centerY = this.height / 2 + 38;
+        int left = centerX - 43;
+        int top = centerY - 79;
+        int right = centerX + 43;
+        int scissorBottom = centerY + 4;
+        int scale = Math.max(1, Math.round(70 * effectivePreviewZoom()));
+
+        graphics.enableScissor(left, top, right, scissorBottom);
+        drawPreviewEntity(graphics, left, top, right, centerY + 68, scale, mouseY, player);
+        graphics.disableScissor();
+    }
+
+    private void drawPreviewEntity(GuiGraphicsExtractor graphics, int x1, int y1, int x2, int y2,
+                                   int size, float mouseY, net.minecraft.world.entity.LivingEntity entity) {
+        float centerY = (y1 + y2) / 2f;
+        float verticalAngle = (float) Math.atan((centerY - mouseY) / 40f);
+        Quaternionf rotation = new Quaternionf().rotateZ((float) Math.PI);
+        Quaternionf xRotation = new Quaternionf().rotateX(verticalAngle * 20f * (float) (Math.PI / 180));
+        rotation.mul(xRotation);
+
+        EntityRenderState renderState = InventoryScreen.extractRenderState(entity);
+        if(renderState instanceof LivingEntityRenderState livingState) {
+            livingState.bodyRot = 180f + previewView.yaw;
+            livingState.yRot = previewView.yaw;
+            if(livingState.pose != Pose.FALL_FLYING) {
+                livingState.xRot = -verticalAngle * 20f;
+            } else {
+                livingState.xRot = 0f;
+            }
+
+            livingState.boundingBoxWidth /= livingState.scale;
+            livingState.boundingBoxHeight /= livingState.scale;
+            livingState.scale = 1f;
+        }
+
+        Vector3f translation = new Vector3f(0f, renderState.boundingBoxHeight / 2f + ENTITY_SCALE, 0f);
+        graphics.entity(renderState, size, translation, rotation, xRotation, x1, y1, x2, y2);
+    }
+
+    private float effectivePreviewZoom() {
+        return previewAutoFit ? calculateAutoFitZoom() : previewZoom;
+    }
+
+    private float calculateAutoFitZoom() {
+        PlayerConfig plr = getPlayer();
+        if(plr == null) return 1f;
+        var breasts = plr.getBreasts();
+
+        float bust = clamp(plr.getBustSize(), .02f, 8f);
+        float width = clamp(breasts.getWidth(), .1f, 5f);
+        float height = clamp(breasts.getHeight(), .1f, 5f);
+        float projectionScale = clamp(breasts.getProjection(), .1f, 7f);
+        float root = clamp(breasts.getRootWidth(), .05f, 5f);
+        float fullness = clamp(breasts.getOuterFullness(), .05f, 5.5f);
+        float balance = clamp(Math.abs(breasts.getBalance()), 0f, .95f);
+        float drop = clamp(breasts.getDrop(), -5f, 7f);
+
+        float baseX = 1.55f + .55f * bust + .07f * bust * bust;
+        float baseY = 2f + .58f * bust + .07f * bust * bust;
+        float sideScale = 1f + balance;
+        float rootX = Math.min(80f, 1.94f * root * (1f + .035f * bust))
+                * width * sideScale * (1f + .22f * .62f);
+        float outerX = Math.min(120f, baseX * fullness) * width * sideScale * 1.9f;
+        float outerY = Math.min(120f, baseY * (.72f + .28f * fullness))
+                * height * sideScale * (1f + .42f * .62f);
+        float projection = Math.min(160f, (1.35f + 1.4f * bust + .22f * bust * bust)
+                * (.78f + .22f * (float) Math.sqrt(fullness)))
+                * projectionScale * sideScale * (1f + .34f * .62f);
+
+        float horizontalSpan = 4f + 2f * Math.max(rootX, outerX) + Math.abs(breasts.getXOffset()) * 2f;
+        float sag = Math.abs(drop) * Math.max(1f, outerY * .52f);
+        float verticalSpan = outerY * 3.05f + sag * 2f + Math.abs(breasts.getYOffset()) * 2f;
+        float depthSpan = projection + Math.abs(breasts.getZOffset());
+
+        float verticalRatio = verticalSpan / 31f;
+        float frontRatio = Math.max(horizontalSpan / 10f, verticalRatio);
+        float sideRatio = Math.max(depthSpan / 10f, verticalRatio);
+        float viewRatio = switch(previewView) {
+            case FRONT -> frontRatio;
+            case THREE_QUARTER -> Math.max((horizontalSpan * .72f + depthSpan * .70f) / 10f, verticalRatio);
+            case SIDE -> sideRatio;
+        };
+        return clamp(.94f / Math.max(1f, viewRatio), .015f, 1.1f);
+    }
+
+    private static float clamp(float value, float min, float max) {
+        if(!Float.isFinite(value)) return min;
+        return Math.max(min, Math.min(max, value));
     }
 
     @Override
@@ -520,29 +727,41 @@ public class WildfireBreastCustomizationScreen extends BaseWildfireScreen {
         return super.mouseReleased(arg);
     }
 
-    /*@Override
-    public boolean keyPressed(KeyInput input) {
-        if(currentTab == Tab.PHYSICS) {
-            if (input.getKeycode() == MinecraftClient.getInstance().options.jumpKey.getDefaultKey().getCode()) {
-                MinecraftClient.getInstance().options.jumpKey.setPressed(true);
-            }
-        }
-        return super.keyPressed(input);
-    }*/
-
-    private enum Tab {
-        CUSTOMIZATION(BACKGROUND_CUSTOMIZATION, 80),
-        SHAPE(BACKGROUND_MISC, 128),
-        PHYSICS(BACKGROUND_MISC, 128),
-        MISC(BACKGROUND_MISC, 128),
+    private enum PreviewView {
+        FRONT(0, 0f, "wildfire_gender.preview.front", "wildfire_gender.preview.front.tooltip"),
+        THREE_QUARTER(1, 38f, "wildfire_gender.preview.three_quarter", "wildfire_gender.preview.three_quarter.tooltip"),
+        SIDE(2, 90f, "wildfire_gender.preview.side", "wildfire_gender.preview.side.tooltip"),
         ;
 
-        final Identifier background;
-        final int backgroundHeight;
+        final int index;
+        final float yaw;
+        final String translationKey;
+        final String tooltipKey;
 
-        Tab(Identifier background, int backgroundHeight) {
-            this.background = background;
-            this.backgroundHeight = backgroundHeight;
+        PreviewView(int index, float yaw, String translationKey, String tooltipKey) {
+            this.index = index;
+            this.yaw = yaw;
+            this.translationKey = translationKey;
+            this.tooltipKey = tooltipKey;
+        }
+    }
+
+    private enum Tab {
+        VOLUME("wildfire_gender.breast_customization.tab_volume", 45),
+        SHAPE("wildfire_gender.breast_customization.tab_shape", 42),
+        PLACEMENT("wildfire_gender.breast_customization.tab_placement", 62),
+        MOTION("wildfire_gender.breast_customization.tab_motion", 46),
+        DETAILS("wildfire_gender.breast_customization.tab_details", 47),
+        ;
+
+        final String translationKey;
+        final int width;
+        final Identifier background = BACKGROUND_MISC;
+        final int backgroundHeight = 128;
+
+        Tab(String translationKey, int width) {
+            this.translationKey = translationKey;
+            this.width = width;
         }
     }
 }

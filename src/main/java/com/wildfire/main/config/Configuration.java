@@ -39,36 +39,37 @@ public class Configuration extends AbstractConfiguration {
     public static final String CONFIG_DIR = "FemaleGenderMod";
 
     public static final EnumConfigKey<Gender> GENDER = new EnumConfigKey<>("gender", Gender.MALE, Gender.BY_ID);
-    /**
-     * Overall breast size. The legacy editor stopped at 0.8 (100% in the UI); keep the same
-     * default and scale while allowing a much broader range of bodies.
-     */
-    public static final FloatConfigKey BUST_SIZE = new FloatConfigKey("bust_size", 0.6F, 0, 2.4f);
+    /** Overall geometric expansion. Runtime scaling is nonlinear so ordinary and extreme sizes remain editable. */
+    public static final FloatConfigKey BUST_SIZE = new FloatConfigKey("bust_size", 0.6F, 0, 8F);
     public static final BooleanConfigKey HURT_SOUNDS = new BooleanConfigKey("hurt_sounds", true);
     public static final FloatConfigKey VOICE_PITCH = new FloatConfigKey("voice_pitch", 1F, 0.8f, 1.2f);
 
-    public static final FloatConfigKey BREASTS_OFFSET_X = new FloatConfigKey("breasts_xOffset", 0.0F, -1, 1);
-    public static final FloatConfigKey BREASTS_OFFSET_Y = new FloatConfigKey("breasts_yOffset", 0.0F, -1, 1);
-    public static final FloatConfigKey BREASTS_OFFSET_Z = new FloatConfigKey("breasts_zOffset", 0.0F, -1, 0);
+    public static final FloatConfigKey BREASTS_OFFSET_X = new FloatConfigKey("breasts_xOffset", 0.0F, -3, 3);
+    public static final FloatConfigKey BREASTS_OFFSET_Y = new FloatConfigKey("breasts_yOffset", 0.0F, -3, 3);
+    public static final FloatConfigKey BREASTS_OFFSET_Z = new FloatConfigKey("breasts_zOffset", 0.0F, -3, 2);
     public static final BooleanConfigKey BREASTS_UNIBOOB = new BooleanConfigKey("breasts_uniboob", true);
-    public static final FloatConfigKey BREASTS_CLEAVAGE = new FloatConfigKey("breasts_cleavage", 0, 0, 0.1F);
-    public static final FloatConfigKey BREASTS_WIDTH = new FloatConfigKey("breasts_width", 1F, 0.5F, 2F);
-    public static final FloatConfigKey BREASTS_HEIGHT = new FloatConfigKey("breasts_height", 1F, 0.5F, 2F);
-    public static final FloatConfigKey BREASTS_PROJECTION = new FloatConfigKey("breasts_projection", 1F, 0.5F, 2.5F);
-    public static final FloatConfigKey BREASTS_BALANCE = new FloatConfigKey("breasts_balance", 0F, -0.4F, 0.4F);
+    public static final FloatConfigKey BREASTS_CLEAVAGE = new FloatConfigKey("breasts_cleavage", 0, -0.35F, 0.35F);
+    public static final FloatConfigKey BREASTS_WIDTH = new FloatConfigKey("breasts_width", 1F, 0.1F, 5F);
+    public static final FloatConfigKey BREASTS_HEIGHT = new FloatConfigKey("breasts_height", 1F, 0.1F, 5F);
+    public static final FloatConfigKey BREASTS_PROJECTION = new FloatConfigKey("breasts_projection", 1F, 0.1F, 7F);
+    public static final FloatConfigKey BREASTS_BALANCE = new FloatConfigKey("breasts_balance", 0F, -0.95F, 0.95F);
+    public static final FloatConfigKey BREASTS_ROOT_WIDTH = new FloatConfigKey("breasts_root_width", 1F, 0.25F, 4F);
+    public static final FloatConfigKey BREASTS_OUTER_FULLNESS =
+            new FloatConfigKey("breasts_outer_fullness", 1F, 0.1F, 5F);
+    public static final FloatConfigKey BREASTS_DROP = new FloatConfigKey("breasts_drop", 0F, -3F, 5F);
     public static final NamedEnumConfigKey<BreastShape> BREASTS_SHAPE =
             new NamedEnumConfigKey<>("breasts_shape", BreastShape.CLASSIC, BreastShape::byName, BreastShape::id);
     public static final BooleanConfigKey BREASTS_NIPPLES = new BooleanConfigKey("breasts_nipples", false);
     public static final FloatConfigKey BREASTS_NIPPLE_SIZE =
-            new FloatConfigKey("breasts_nipple_size", 0.65F, 0.25F, 1.25F);
+            new FloatConfigKey("breasts_nipple_size", 0.65F, 0.1F, 3F);
 
     public static final BooleanConfigKey BREAST_PHYSICS = new BooleanConfigKey("breast_physics", true);
     public static final BooleanConfigKey SHOW_IN_ARMOR = new BooleanConfigKey("show_in_armor", true);
-    public static final FloatConfigKey BOUNCE_MULTIPLIER = new FloatConfigKey("bounce_multiplier", 0.333F, 0, 0.5f);
-    public static final FloatConfigKey FLOPPY_MULTIPLIER = new FloatConfigKey("floppy_multiplier", 0.75F, 0.25f, 1);
+    public static final FloatConfigKey BOUNCE_MULTIPLIER = new FloatConfigKey("bounce_multiplier", 0.55F, 0, 2F);
+    public static final FloatConfigKey FLOPPY_MULTIPLIER = new FloatConfigKey("floppy_multiplier", 0.75F, 0.05F, 1.5F);
     public static final BooleanConfigKey WOBBLE_ENABLED = new BooleanConfigKey("wobble_enabled", true);
-    public static final FloatConfigKey WOBBLE_INTENSITY = new FloatConfigKey("wobble_intensity", 0.55F, 0F, 1F);
-    public static final FloatConfigKey WOBBLE_SPEED = new FloatConfigKey("wobble_speed", 1F, 0.5F, 2F);
+    public static final FloatConfigKey WOBBLE_INTENSITY = new FloatConfigKey("wobble_intensity", 0.65F, 0F, 3F);
+    public static final FloatConfigKey WOBBLE_SPEED = new FloatConfigKey("wobble_speed", 1F, 0.1F, 4F);
 
     public static final BooleanConfigKey HOLIDAY_THEMES = new BooleanConfigKey("holiday_themes", true);
 
@@ -128,6 +129,9 @@ public class Configuration extends AbstractConfiguration {
             new RegisteredKey<>(BREASTS_HEIGHT, Breasts::getHeight, Breasts::updateHeight),
             new RegisteredKey<>(BREASTS_PROJECTION, Breasts::getProjection, Breasts::updateProjection),
             new RegisteredKey<>(BREASTS_BALANCE, Breasts::getBalance, Breasts::updateBalance),
+            new RegisteredKey<>(BREASTS_ROOT_WIDTH, Breasts::getRootWidth, Breasts::updateRootWidth),
+            new RegisteredKey<>(BREASTS_OUTER_FULLNESS, Breasts::getOuterFullness, Breasts::updateOuterFullness),
+            new RegisteredKey<>(BREASTS_DROP, Breasts::getDrop, Breasts::updateDrop),
             new RegisteredKey<>(BREASTS_SHAPE, Breasts::getShape, Breasts::updateShape),
             new RegisteredKey<>(BREASTS_NIPPLES, Breasts::hasNipples, Breasts::updateNipples),
             new RegisteredKey<>(BREASTS_NIPPLE_SIZE, Breasts::getNippleSize, Breasts::updateNippleSize),

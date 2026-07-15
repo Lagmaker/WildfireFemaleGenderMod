@@ -19,461 +19,413 @@
 package com.wildfire.physics;
 
 import com.wildfire.api.IGenderArmor;
-import com.wildfire.main.WildfireHelper;
 import com.wildfire.main.entitydata.EntityConfig;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.Pose;
-import net.minecraft.world.entity.animal.chicken.Chicken;
-import net.minecraft.world.entity.animal.pig.Pig;
-import net.minecraft.world.entity.animal.camel.Camel;
-import net.minecraft.world.entity.animal.equine.AbstractHorse;
 import net.minecraft.world.entity.decoration.ArmorStand;
-import net.minecraft.world.entity.monster.Strider;
-import net.minecraft.world.entity.vehicle.boat.Boat;
-import net.minecraft.world.entity.vehicle.minecart.Minecart;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
+/**
+ * A deterministic secondary-motion rig driven by the entity's measured motion.
+ *
+ * <p>Each visible degree of freedom is a critically/under-damped spring. The spring's mass is derived
+ * from the configured breast size, while floppiness controls stiffness and damping independently of
+ * the motion amplitude. This keeps the editor's extreme ranges expressive without making the numeric
+ * integration unstable.</p>
+ */
 public class BreastPhysics {
 
     public static final float TIGHTNESS_REDUCTION_FACTOR = 0.15F;
 
-    //X-Axis
-    private float bounceVelX = 0, targetBounceX = 0, velocityX = 0, positionX, prePositionX;
-    //Y-Axis
-    private float bounceVel = 0, targetBounceY = 0, velocity = 0, positionY, prePositionY;
-    //Rotation
-    private float bounceRotVel = 0, targetRotVel = 0, rotVelocity = 0, bounceRotation, preBounceRotation;
+    private static final float MAX_CONFIGURED_SIZE = 8F;
+    private static final float MAX_BOUNCE = 2F;
+    private static final float MIN_FLOPPINESS = 0.05F;
+    private static final float MAX_FLOPPINESS = 1.5F;
+    private static final float MAX_WOBBLE_INTENSITY = 3F;
+    private static final float MIN_WOBBLE_SPEED = 0.1F;
+    private static final float MAX_WOBBLE_SPEED = 4F;
 
-    private float breastSize = 0, preBreastSize = 0;
-    // Secondary soft-tissue response. Unlike positionY, this is a small, bounded deformation value.
-    private float wobble = 0, preWobble = 0, wobbleVelocity = 0, previousPrimaryDelta = 0;
+    // Large discontinuities are teleports/dimension transitions, not useful physical impulses.
+    private static final double TELEPORT_DISTANCE_SQUARED = 16D;
 
-    private @Nullable Pose lastPose;
-    private int lastSwingDuration = 6, lastSwingTick = 0;
-    private @Nullable Vec3 prePos;
+    private final SpringAxis lateral = new SpringAxis();
+    private final SpringAxis vertical = new SpringAxis();
+    private final SpringAxis rotation = new SpringAxis();
+    private final SpringAxis shape = new SpringAxis();
+
+    private float breastSize;
+    private float preBreastSize;
 
     private final EntityConfig entityConfig;
-    private int randomB = 1;
-    private double lastVerticalMoveVelocity;
+    private final float sidePhase;
+
+    private @Nullable Vec3 previousPosition;
+    private Vec3 previousMotion = Vec3.ZERO;
+    private float previousTurnRate;
+    private float previousArmSignal;
 
     public BreastPhysics(EntityConfig entityConfig) {
+        this(entityConfig, 0F);
+    }
+
+    /**
+     * @param sidePhase phase offset in radians, used to give separately simulated breasts coherent but
+     *                  non-identical gait and arm responses
+     */
+    public BreastPhysics(EntityConfig entityConfig, float sidePhase) {
         this.entityConfig = entityConfig;
+        this.sidePhase = Float.isFinite(sidePhase) ? sidePhase : 0F;
     }
 
-    private static boolean vehicleSuppressesRotation(Entity vehicle) {
-        return switch(vehicle) {
-            // while you aren't able to normally ride chickens in vanilla, it is still possible through
-            // means like /ride, and as chickens attempt to force the rider's body yaw to the same yaw
-            // as the chicken (which is likely intended only for baby zombies), this results in unintended
-            // behavior with what we're doing
-            case Chicken _ -> true;
-            // unsaddled horses (and llamas, which also extend AbstractDonkeyEntity?) also break rotation
-            // physics, despite acting similarly to other entities where the rider's body yaw is allowed to
-            // (somewhat) freely move around
-            case AbstractHorse horse when !horse.isSaddled() -> true;
-            // camels also suffer from largely the same issue as unsaddled horses when sitting or standing up
-            case Camel camel when camel.refuseToMove() -> true;
-            default -> false;
-        };
-    }
-
-    private static boolean shouldUseVehicleYaw(LivingEntity rider, Entity vehicle) {
-        return (
-                vehicle.hasControllingPassenger()
-                // boats will typically be caught by the above #hasControllingPassenger() check, but still
-                // special case these to catch any weird modded cases that might arise
-                || vehicle instanceof Boat
-                // general catch-all for other entities that force the rider's body yaw to match theirs,
-                // such as horses
-                || vehicle.getVisualRotationYInDegrees() == rider.getVisualRotationYInDegrees()
-        );
-    }
-
-    private float calcRotation(LivingEntity entity, float bounceIntensity) {
-        Entity vehicle = entity.getVehicle();
-        if(vehicle != null) {
-            if(vehicleSuppressesRotation(vehicle)) {
-                return 0f;
-            } else if(shouldUseVehicleYaw(entity, vehicle)) {
-                float previous = vehicle instanceof LivingEntity living ? living.yBodyRotO : vehicle.yRotO;
-                return -((vehicle.getVisualRotationYInDegrees() - previous) / 15f) * bounceIntensity;
-            }
-        }
-
-        return -((entity.yBodyRot - entity.yBodyRotO) / 15f) * bounceIntensity;
-    }
-
-    // this class cannot be blanket marked as client-side only, as this is referenced in the constructor for EntityConfig;
-    // as such, the best we can get here is marking this method as such.
+    // This class cannot be blanket marked as client-side only, as it is constructed by EntityConfig.
     @Environment(EnvType.CLIENT)
     public void update(LivingEntity entity, IGenderArmor armor) {
-        // always suppress the full physics calculations on armor stands
+        snapshot();
+
         if(entity instanceof ArmorStand || entityConfig.forceSimplifiedPhysics) {
             simplifiedTick(armor);
             return;
         }
 
-        this.prePositionY = this.positionY;
-        this.prePositionX = this.positionX;
-        this.preBounceRotation = this.bounceRotation;
-        this.preBreastSize = this.breastSize;
-        this.preWobble = this.wobble;
+        float tightness = entityConfig.getArmorPhysicsOverride()
+                ? 0F : finiteClamp(armor.tightness(), 0F, 1F);
+        float resistance = entityConfig.getArmorPhysicsOverride()
+                ? 0F : finiteClamp(armor.physicsResistance(), 0F, 1F);
+        float configuredSize = configuredSize();
+        float targetSize = configuredSize * (1F - TIGHTNESS_REDUCTION_FACTOR * tightness);
 
-        if(this.prePos == null) {
-            this.prePos = entity.position();
+        Vec3 currentPosition = entity.position();
+        if(previousPosition == null) {
+            rebase(entity, currentPosition, targetSize);
             return;
         }
 
-        float breastWeight = entityConfig.getBustSize() * 1.25f;
-        float targetBreastSize = entityConfig.getBustSize();
-
-        if (!entityConfig.getGender().canHaveBreasts()) {
-            targetBreastSize = 0;
-        } else {
-            float tightness = Mth.clamp(armor.tightness(), 0, 1);
-            if(entityConfig.getArmorPhysicsOverride()) tightness = 0; //override resistance
-            //Scale breast size by how tight the armor is, clamping at a max adjustment of shrinking by 0.15
-            targetBreastSize *= 1 - TIGHTNESS_REDUCTION_FACTOR * tightness;
+        // Shape changes are presentation changes, not forces. Smooth them without moving the spring equilibrium.
+        breastSize += (targetSize - breastSize) * 0.38F;
+        if(Math.abs(targetSize - breastSize) < 0.0001F) {
+            breastSize = targetSize;
         }
 
-        breastSize += (breastSize < targetBreastSize) ? Math.abs(breastSize - targetBreastSize) / 2f : -Math.abs(breastSize - targetBreastSize) / 2f;
-
-        Vec3 motion = entity.position().subtract(this.prePos);
-        this.prePos = entity.position();
-
-        float bounceIntensity = (targetBreastSize * 3f) * Math.round((entityConfig.getBounceMultiplier() * 3) * 100) / 100f;
-        float resistance = Mth.clamp(armor.physicsResistance(), 0, 1);
-        if(entityConfig.getArmorPhysicsOverride()) resistance = 0; //override resistance
-
-        //Adjust bounce intensity by physics resistance of the worn armor
-        bounceIntensity *= 1 - resistance;
-
-        if(!entityConfig.getBreasts().isUniboob()) {
-            bounceIntensity = bounceIntensity * WildfireHelper.randFloat(0.5f, 1.5f);
+        Vec3 motion = currentPosition.subtract(previousPosition);
+        previousPosition = currentPosition;
+        if(motion.lengthSqr() > TELEPORT_DISTANCE_SQUARED || !isFinite(motion)) {
+            previousMotion = Vec3.ZERO;
+            previousTurnRate = currentTurnRate(entity);
+            previousArmSignal = 0F;
+            settleWithoutDrive(tightness, resistance, configuredSize);
+            return;
         }
 
-        tickMovement(entity, motion, bounceIntensity, breastWeight);
-        tickPose(entity, bounceIntensity);
-        tickVehicle(entity, bounceIntensity, breastWeight);
-        tickArmSwing(entity, bounceIntensity);
-        finishTick();
-        tickWobble();
+        Vec3 acceleration = motion.subtract(previousMotion);
+        previousMotion = motion;
+
+        float yaw = entity.yBodyRot * Mth.DEG_TO_RAD;
+        float cosYaw = Mth.cos(yaw);
+        float sinYaw = Mth.sin(yaw);
+        float localSideAcceleration = finiteClamp(
+                (float) acceleration.x * cosYaw + (float) acceleration.z * sinYaw, -1.25F, 1.25F);
+        float localForwardAcceleration = finiteClamp(
+                -(float) acceleration.x * sinYaw + (float) acceleration.z * cosYaw, -1.25F, 1.25F);
+        float verticalAcceleration = finiteClamp((float) acceleration.y, -1.5F, 1.5F);
+
+        float turnRate = currentTurnRate(entity);
+        float turnAcceleration = Mth.clamp(turnRate - previousTurnRate, -45F, 45F);
+        previousTurnRate = turnRate;
+
+        AnimationDrive animation = animationDrive(entity);
+        tickRig(configuredSize, tightness, resistance, verticalAcceleration, localSideAcceleration,
+                localForwardAcceleration, turnRate, turnAcceleration, animation);
+    }
+
+    private void snapshot() {
+        lateral.snapshot();
+        vertical.snapshot();
+        rotation.snapshot();
+        shape.snapshot();
+        preBreastSize = breastSize;
+    }
+
+    private float configuredSize() {
+        if(!entityConfig.getGender().canHaveBreasts()) {
+            return 0F;
+        }
+        return finiteClamp(entityConfig.getBustSize(), 0F, MAX_CONFIGURED_SIZE);
+    }
+
+    private void rebase(LivingEntity entity, Vec3 position, float targetSize) {
+        previousPosition = position;
+        previousMotion = Vec3.ZERO;
+        previousTurnRate = currentTurnRate(entity);
+        previousArmSignal = 0F;
+        breastSize = preBreastSize = targetSize;
     }
 
     private void simplifiedTick(IGenderArmor armor) {
-        if(entityConfig.getGender().canHaveBreasts()) {
-            this.breastSize = entityConfig.getBustSize();
-            if(!entityConfig.getArmorPhysicsOverride()) {
-                float tightness = Mth.clamp(armor.tightness(), 0, 1);
-                this.breastSize *= 1 - TIGHTNESS_REDUCTION_FACTOR * tightness;
-            }
-            this.preBreastSize = this.breastSize;
-        } else {
-            this.preBreastSize = this.breastSize = 0f;
-        }
-        this.preWobble = this.wobble = this.wobbleVelocity = this.previousPrimaryDelta = 0f;
+        float tightness = entityConfig.getArmorPhysicsOverride()
+                ? 0F : finiteClamp(armor.tightness(), 0F, 1F);
+        breastSize = configuredSize() * (1F - TIGHTNESS_REDUCTION_FACTOR * tightness);
+        preBreastSize = breastSize;
+        lateral.reset();
+        vertical.reset();
+        rotation.reset();
+        shape.reset();
+        previousPosition = null;
+        previousMotion = Vec3.ZERO;
+        previousTurnRate = 0F;
+        previousArmSignal = 0F;
     }
 
-    /**
-     * Advance a bounded secondary spring from the acceleration of the primary breast rig.
-     *
-     * <p>This intentionally deforms the model instead of adding more positional bounce. A semi-implicit,
-     * damped update keeps the result stable even at the editor's maximum dimensions and after frame stalls.</p>
-     */
-    private void tickWobble() {
+    private void settleWithoutDrive(float tightness, float resistance, float size) {
+        tickRig(size, tightness, resistance, 0F, 0F, 0F, 0F, 0F, AnimationDrive.NONE);
+    }
+
+    private void tickRig(float size, float tightness, float resistance,
+                         float verticalAcceleration, float sideAcceleration, float forwardAcceleration,
+                         float turnRate, float turnAcceleration, AnimationDrive animation) {
+        boolean physicsEnabled = entityConfig.hasBreastPhysics() && entityConfig.getGender().canHaveBreasts();
+        float bounce = physicsEnabled ? finiteClamp(entityConfig.getBounceMultiplier(), 0F, MAX_BOUNCE) : 0F;
+        float floppiness = finiteClamp(entityConfig.getFloppiness(), MIN_FLOPPINESS, MAX_FLOPPINESS);
+        float floppyUnit = (floppiness - MIN_FLOPPINESS) / (MAX_FLOPPINESS - MIN_FLOPPINESS);
+
+        // Mass grows continuously throughout the full 0..8 editor range. Large sizes respond more slowly and
+        // carry more momentum; an exponential response keeps small sizes precise without flattening the high end.
+        float sizeResponse = 1F - (float) Math.exp(-size * 0.42F);
+        float mass = 0.78F + size * 0.28F + (float) Math.sqrt(size) * 0.22F;
+        float rootMass = (float) Math.sqrt(mass);
+
+        float support = (1F - resistance * 0.78F) * (1F - tightness * 0.58F);
+        float driveGain = bounce * (0.45F + sizeResponse * 1.25F) * support;
+
+        float baseStiffness = (0.29F - floppyUnit * 0.215F) / rootMass;
+        float supportStiffness = 1F + tightness * 0.9F + resistance * 0.55F;
+        float verticalStiffness = Mth.clamp(baseStiffness * supportStiffness, 0.035F, 0.38F);
+        float lateralStiffness = Mth.clamp(verticalStiffness * 1.12F, 0.04F, 0.42F);
+        float rotationStiffness = Mth.clamp(verticalStiffness * 0.84F, 0.03F, 0.34F);
+        float dampingRatio = Mth.clamp(0.98F - floppyUnit * 0.64F
+                + tightness * 0.34F + resistance * 0.24F, 0.30F, 1.35F);
+
+        // Local acceleration is inertial drive. Gait and arm movement approximate torso acceleration that is not
+        // represented in the entity's root position. No random values or entity/vehicle-specific branches are used.
+        float targetY = (verticalAcceleration * 5.4F
+                - forwardAcceleration * 1.7F
+                + animation.vertical() * 0.72F
+                + animation.arm() * 0.18F) * driveGain;
+        float targetX = (-sideAcceleration * 4.25F
+                - turnAcceleration * 0.025F
+                + animation.lateral() * 0.42F
+                + animation.arm() * 0.62F) * driveGain;
+        float targetRotation = (-turnRate * (0.62F + sizeResponse * 0.58F)
+                - sideAcceleration * 10F
+                + animation.arm() * 6.5F) * driveGain;
+
+        float yLimit = 0.65F + sizeResponse * 2.25F + bounce * 0.55F;
+        float xLimit = 0.45F + sizeResponse * 1.55F + bounce * 0.42F;
+        float rotationLimit = 8F + sizeResponse * 22F + bounce * 4F;
+        targetY = Mth.clamp(targetY, -yLimit, yLimit);
+        targetX = Mth.clamp(targetX, -xLimit, xLimit);
+        targetRotation = Mth.clamp(targetRotation, -rotationLimit, rotationLimit);
+
+        float oldVerticalVelocity = vertical.velocity;
+        float oldLateralVelocity = lateral.velocity;
+        float oldAngularVelocity = rotation.velocity;
+
+        vertical.step(targetY, 0F, verticalStiffness, dampingRatio, yLimit, 1.9F, 1.25F);
+        lateral.step(targetX, 0F, lateralStiffness, dampingRatio + 0.06F, xLimit, 1.35F, 0.95F);
+        rotation.step(targetRotation, 0F, rotationStiffness, dampingRatio + 0.08F,
+                rotationLimit, 13F, 9F);
+
+        float primaryVerticalAcceleration = vertical.velocity - oldVerticalVelocity;
+        float primaryLateralAcceleration = lateral.velocity - oldLateralVelocity;
+        float primaryAngularAcceleration = rotation.velocity - oldAngularVelocity;
+        tickShapeWobble(sizeResponse, mass, floppyUnit, tightness, resistance,
+                primaryVerticalAcceleration, primaryLateralAcceleration, primaryAngularAcceleration,
+                forwardAcceleration, animation.vertical());
+
+        if(!physicsEnabled) {
+            // Disabled physics should be calm when re-enabled instead of preserving an invisible impulse forever.
+            previousArmSignal = 0F;
+        }
+    }
+
+    private void tickShapeWobble(float sizeResponse, float mass, float floppyUnit,
+                                 float tightness, float resistance,
+                                 float verticalAcceleration, float lateralAcceleration,
+                                 float angularAcceleration, float forwardAcceleration, float gaitDrive) {
         boolean enabled = entityConfig.hasBreastPhysics() && entityConfig.hasWobble()
                 && entityConfig.getGender().canHaveBreasts();
-        float speed = Mth.clamp(entityConfig.getWobbleSpeed(), 0.5f, 2f);
-        float intensity = enabled ? Mth.clamp(entityConfig.getWobbleIntensity(), 0f, 1f) : 0f;
+        float intensity = enabled
+                ? finiteClamp(entityConfig.getWobbleIntensity(), 0F, MAX_WOBBLE_INTENSITY) : 0F;
+        float speed = finiteClamp(entityConfig.getWobbleSpeed(), MIN_WOBBLE_SPEED, MAX_WOBBLE_SPEED);
 
-        float primaryDelta = positionY - prePositionY;
-        float acceleration = Mth.clamp(primaryDelta - previousPrimaryDelta, -0.75f, 0.75f);
-        previousPrimaryDelta = primaryDelta;
+        // Shape deformation is coupled to changes in the primary rig, not a second copy of position bounce.
+        // This produces a delayed squash/stretch response after impacts and direction changes.
+        float coupling = 0.48F + sizeResponse * 0.82F;
+        float drive = -(verticalAcceleration * 0.34F
+                + lateralAcceleration * 0.075F
+                + angularAcceleration * 0.006F
+                + forwardAcceleration * 0.075F
+                + gaitDrive * 0.012F) * intensity * coupling;
+        drive = Mth.clamp(drive, -0.18F, 0.18F);
 
-        // Size contributes with diminishing returns, preventing extreme editor values from destabilizing the rig.
-        float sizeResponse = (float) Math.tanh(Math.max(entityConfig.getBustSize(), 0f) * 0.8f);
-        float drive = -acceleration * intensity * (0.12f + sizeResponse * 0.16f);
-        float stiffness = 0.12f * speed * speed;
-        float damping = Mth.clamp(0.76f - (speed - 1f) * 0.055f, 0.68f, 0.82f);
+        float speedUnit = (speed - MIN_WOBBLE_SPEED) / (MAX_WOBBLE_SPEED - MIN_WOBBLE_SPEED);
+        float stiffness = (0.028F + speedUnit * 0.225F) / (float) Math.pow(mass, 0.18F);
+        float dampingRatio = Mth.clamp(0.42F + (1F - floppyUnit) * 0.24F
+                + tightness * 0.42F + resistance * 0.36F, 0.34F, 1.4F);
 
-        wobbleVelocity += (drive - wobble) * stiffness;
-        wobbleVelocity *= damping;
-        wobble = Mth.clamp(wobble + wobbleVelocity, -0.22f, 0.22f);
-
-        if(!Float.isFinite(wobble) || !Float.isFinite(wobbleVelocity)) {
-            wobble = wobbleVelocity = previousPrimaryDelta = 0f;
+        if(!enabled) {
+            stiffness = Math.max(stiffness, 0.12F);
+            dampingRatio = Math.max(dampingRatio, 1F);
         }
-        if(!enabled && Math.abs(wobble) < 0.0005f && Math.abs(wobbleVelocity) < 0.0005f) {
-            wobble = wobbleVelocity = 0f;
-        }
+
+        float limit = Mth.clamp(0.055F + intensity * 0.22F * (0.4F + sizeResponse * 0.6F),
+                0.055F, 0.62F);
+        shape.step(0F, drive, stiffness, dampingRatio, limit, 0.32F, 0.18F);
     }
 
-    private void tickMovement(final LivingEntity entity, final Vec3 motion, final float bounceIntensity, final float breastWeight) {
-        double vertVelocity = entity.getDeltaMovement().y;
-        // Randomize which side the breast will angle toward when the player jumps/has upward velocity applied to them,
-        // or stops falling
-        if((lastVerticalMoveVelocity <= 0 && vertVelocity > 0) || (lastVerticalMoveVelocity < 0 && vertVelocity == 0)) {
-            randomB = entity.level().getRandom().nextBoolean() ? -1 : 1;
+    private AnimationDrive animationDrive(LivingEntity entity) {
+        float walkSpeed = finiteClamp(entity.walkAnimation.speed(), 0F, 1.5F);
+        float walkAmount = walkSpeed * walkSpeed;
+        float walkPhase = entity.walkAnimation.position() * 0.6662F;
+        float gaitVertical = Mth.sin(walkPhase * 2F + sidePhase * 0.35F) * walkAmount;
+        float gaitLateral = Mth.sin(walkPhase + sidePhase) * walkAmount;
+
+        float armSignal = 0F;
+        if(entity.swinging) {
+            int duration = Math.max(entity.getCurrentSwingDuration(), 1);
+            float progress = Mth.clamp((float) entity.swingTime / duration, 0F, 1F);
+            HumanoidArm arm = entity.swingingArm == InteractionHand.MAIN_HAND
+                    ? entity.getMainArm() : entity.getMainArm().getOpposite();
+            float armSide = arm == HumanoidArm.RIGHT ? 1F : -1F;
+            armSignal = Mth.sin(progress * Mth.PI) * armSide;
         }
-        lastVerticalMoveVelocity = vertVelocity;
 
-        this.targetBounceY = (float) motion.y * bounceIntensity;
-        this.targetBounceY += breastWeight;
-
-        this.targetRotVel = calcRotation(entity, bounceIntensity);
-        this.targetRotVel += (float) motion.y * bounceIntensity * randomB;
-
-        this.targetBounceX = -calcRotation(entity, bounceIntensity) / 10f;
-
-        float f2 = (float) entity.getDeltaMovement().lengthSqr() / 0.2F;
-        f2 = f2 * f2 * f2;
-        if(f2 < 1.0F) f2 = 1.0F;
-        this.targetBounceY += Mth.cos(entity.walkAnimation.position() * 0.6662F + (float)Math.PI) * 0.5F * entity.walkAnimation.speed() * 0.5F / f2;
+        // The change in the arm animation is an impulse on the torso. Keeping this stateful makes a stopped or
+        // interrupted swing naturally produce a counter-impulse, while remaining completely deterministic.
+        float armImpulse = Mth.clamp(armSignal - previousArmSignal, -1F, 1F);
+        previousArmSignal = armSignal;
+        return new AnimationDrive(gaitVertical, gaitLateral, armImpulse);
     }
 
-    private void tickPose(final LivingEntity entity, final float bounceIntensity) {
-        Pose pose = entity.getPose();
-        if(pose != lastPose) {
-            if(pose == Pose.CROUCHING || lastPose == Pose.CROUCHING) {
-                this.targetBounceY += bounceIntensity;
-            } else if(pose == Pose.SLEEPING || lastPose == Pose.SLEEPING) {
-                this.targetBounceY = bounceIntensity;
-            }
-            lastPose = pose;
-        }
+    private static float currentTurnRate(LivingEntity entity) {
+        return Mth.clamp(Mth.wrapDegrees(entity.yBodyRot - entity.yBodyRotO), -90F, 90F);
     }
 
-    private void tickVehicle(LivingEntity entity, final float bounceIntensity, final float breastWeight) {
-        switch(entity.getVehicle()) {
-            case Boat boat -> {
-                int rowTime = (int) boat.getRowingTime(0, entity.walkAnimation.position());
-                int rowTime2 = (int) boat.getRowingTime(1, entity.walkAnimation.position());
-
-                float rotationL = (float) Mth.clampedLerp(-(float)Math.PI / 3F, -0.2617994F, (double) ((Mth.sin(-rowTime2) + 1.0F) / 2.0F));
-                float rotationR = (float) Mth.clampedLerp(-(float)Math.PI / 4F, (float)Math.PI / 4F, (double) ((Mth.sin(-rowTime + 1.0F) + 1.0F) / 2.0F));
-                if(rotationL < -1 || rotationR < -0.6f) {
-                    this.targetBounceY = bounceIntensity / 3.25f;
-                }
-            }
-            case Minecart cart -> {
-                float speed = (float) cart.getDeltaMovement().lengthSqr();
-                if(Math.random() * speed < 0.5f && speed > 0.2f) {
-                    this.targetBounceY = (Math.random() > 0.5 ? -bounceIntensity : bounceIntensity) / 6f;
-                    this.targetBounceY += breastWeight;
-                }
-            }
-            case AbstractHorse horse -> {
-                float movement = (float) horse.getDeltaMovement().lengthSqr();
-                if(horse.getAge() % clampMovement(movement) == 5 && movement > 0.05f) {
-                    this.targetBounceY = bounceIntensity / 4f;
-                    this.targetBounceY += breastWeight;
-                }
-            }
-            case Pig pig -> {
-                float movement = (float) pig.getDeltaMovement().lengthSqr();
-                if(pig.getAge() % clampMovement(movement) == 5 && movement > 0.002f) {
-                    this.targetBounceY = (bounceIntensity * Mth.clamp(movement * 75, 0.1f, 1f)) / 4f;
-                    this.targetBounceY += breastWeight;
-                }
-            }
-            case Strider strider -> {
-                double heightOffset = (double)strider.getBbHeight() - 0.19
-                        + (double)(0.12F * Mth.cos(strider.walkAnimation.position() * 1.5f)
-                        * 2F * Math.min(0.25F, strider.walkAnimation.speed()));
-                this.targetBounceY += ((float) (heightOffset * 3f) - 4.5f) * bounceIntensity;
-            }
-            case null, default -> {}
-        }
+    private static boolean isFinite(Vec3 value) {
+        return Double.isFinite(value.x) && Double.isFinite(value.y) && Double.isFinite(value.z);
     }
 
-    private void tickArmSwing(LivingEntity entity, final float bounceIntensity) {
-        int swingDuration = entity.getCurrentSwingDuration();
-        // Require that either the current swing duration is 2 ticks, or the swing duration from the previous tick is,
-        // as any faster and the arm effectively doesn't swing at all; we check the previous tick's swing duration for
-        // reasons explained later on in this block
-        if((swingDuration > 1 || lastSwingDuration > 1) && entity.getPose() != Pose.SLEEPING) {
-            float rawAmplifier = 0f;
-            if(swingDuration < 6) {
-                rawAmplifier = 0.15f * (6 - swingDuration);
-            } else if(swingDuration > 6) {
-                rawAmplifier = -0.055f * (swingDuration - 6);
-            }
-            // Cap our amplifier at the swing durations of Mining Fatigue IV/Haste II
-            float amplifier = Mth.clamp(1 + rawAmplifier, 0.6f, 1.3f);
-
-            HumanoidArm swingingArm = entity.swingingArm == InteractionHand.MAIN_HAND ? entity.getMainArm() : entity.getMainArm().getOpposite();
-            int swingTickDelta = entity.swingTime - lastSwingTick;
-            float swingProgress = distanceFromMedian(0, lastSwingDuration, Mth.clamp(lastSwingTick, 0, lastSwingDuration));
-            HumanoidArm swingingToward = swingProgress > -0.2f ? swingingArm.getOpposite() : swingingArm;
-
-            // consistently apply even with short swing durations, such as with haste
-            int everyNthTick = Mth.clamp(swingDuration - 1, 1, 5);
-            if(entity.swinging && entity.tickCount % everyNthTick == 0) {
-                this.targetBounceY += (Math.random() > 0.5 ? -0.25f : 0.25f) * amplifier * bounceIntensity;
-                // The regular amplifier here makes this look relatively unnatural at high levels of mining fatigue,
-                // so instead we're increasing the potency of negative amplifiers (and decreasing positive amplifiers),
-                // and clamping this at a lower range than normal.
-                // The effective range of these numbers is around the swing durations of Mining Fatigue V to Haste II.
-                float xAmp = Mth.clamp(1 + (rawAmplifier * (rawAmplifier < 0 ? 1.625f : 0.8f)), 0.25f, 1.225f);
-                this.targetBounceX = (0.325f * xAmp * bounceIntensity) * (swingingArm == HumanoidArm.RIGHT ? -1f : 1f);
-            }
-
-            if(swingTickDelta < 0 && lastSwingTick != lastSwingDuration - 1) {
-                // Add a bit of counter-rotation back toward the currently swinging arm if the previous arm swing
-                // animation is interrupted
-                // Note that we don't check if the player's arm is currently swinging here to account for cases like
-                // haste being used to reset a player's swing; one notable example of this is Wynncraft's spell casting,
-                // which applies haste to the player when a spell is successfully cast.
-                this.targetRotVel += (swingingArm == HumanoidArm.RIGHT ? -4f : 4f) * Math.abs(swingProgress) * bounceIntensity;
-            } else if(entity.swinging && swingDuration > 1) {
-                // Otherwise if the swing animation isn't interrupted, attempt to rotate slightly counter to the
-                // direction that the body is currently moving
-                this.targetRotVel += (swingingToward == HumanoidArm.RIGHT ? -0.2f : 0.2f) * amplifier * bounceIntensity;
-            }
-            lastSwingTick = entity.swingTime;
-        }
-        if(!entity.swinging) {
-            lastSwingTick = 0;
-        }
-        lastSwingDuration = Math.max(swingDuration, 1);
-    }
-
-    private void finishTick() {
-        float percent = entityConfig.getFloppiness();
-        float bounceAmount = 0.45f * (1f - percent) + 0.15f;
-        bounceAmount = Mth.clamp(bounceAmount, 0.15f, 0.6f);
-        float delta = 2.25f - bounceAmount;
-
-        float distanceFromMin = Math.abs(bounceVel + 1.5f) * 0.5f;
-        float distanceFromMax = Math.abs(bounceVel - 2.65f) * 0.5f;
-
-        if(bounceVel < -0.5f) {
-            targetBounceY += distanceFromMin;
-        }
-        if(bounceVel > 2.5f) {
-            targetBounceY -= distanceFromMax;
-        }
-
-        targetBounceY = Mth.clamp(targetBounceY, -1.5f, 2.5f);
-        targetRotVel = Mth.clamp(targetRotVel, -25f, 25f);
-
-        this.velocity = Mth.lerp(bounceAmount, this.velocity, (this.targetBounceY - this.bounceVel) * delta);
-        this.bounceVel += this.velocity * percent * 1.1625f;
-
-        //X
-        this.velocityX = Mth.lerp(bounceAmount, this.velocityX, (this.targetBounceX - this.bounceVelX) * delta);
-        this.bounceVelX += this.velocityX * percent;
-
-        this.rotVelocity = Mth.lerp(bounceAmount, this.rotVelocity, (this.targetRotVel - this.bounceRotVel) * delta);
-        this.bounceRotVel += this.rotVelocity * percent;
-
-        this.bounceRotation = this.bounceRotVel;
-        this.positionX = this.bounceVelX;
-        this.positionY = this.bounceVel;
-
-        if(this.positionY < -0.5f) this.positionY = -0.5f;
-        if(this.positionY > 1.5f) {
-            this.positionY = 1.5f;
-            this.velocity = 0;
-        }
+    private static float finiteClamp(float value, float min, float max) {
+        return Float.isFinite(value) ? Mth.clamp(value, min, max) : min;
     }
 
     public float getPrePositionY() {
-        return this.prePositionY;
+        return vertical.previous;
     }
+
     public float getPositionY() {
-        return this.positionY;
+        return vertical.position;
     }
 
     public float getPrePositionX() {
-        return this.prePositionX;
+        return lateral.previous;
     }
+
     public float getPositionX() {
-        return this.positionX;
+        return lateral.position;
     }
 
     public float getBounceRotation() {
-        return this.bounceRotation;
+        return rotation.position;
     }
+
     public float getPreBounceRotation() {
-        return this.preBounceRotation;
+        return rotation.previous;
     }
 
     public float getBreastSize() {
-        return this.breastSize;
+        return breastSize;
     }
+
     public float getPreBreastSize() {
-        return this.preBreastSize;
+        return preBreastSize;
     }
 
     public float getWobble() {
-        return wobble;
+        return shape.position;
     }
 
     public float getPreWobble() {
-        return preWobble;
+        return shape.previous;
     }
 
-    /**
-     * Adds a small, bounded impulse for the customization-screen motion preview.
-     */
+    /** Adds a bounded impulse for the customization-screen motion preview. */
     public void addPreviewImpulse(float strength) {
         if(!Float.isFinite(strength)) {
             return;
         }
-        float impulse = Mth.clamp(strength, -0.45f, 0.45f);
-        velocity = Mth.clamp(velocity + impulse, -0.7f, 0.7f);
-        wobbleVelocity = Mth.clamp(wobbleVelocity - impulse * 0.35f, -0.2f, 0.2f);
+        float impulse = Mth.clamp(strength, -2F, 2F);
+        vertical.impulse(impulse * 1.35F, 1.9F);
+        lateral.impulse(Mth.sin(sidePhase) * impulse * 0.18F, 1.35F);
+        rotation.impulse(Mth.sin(sidePhase) * impulse * 2.4F, 13F);
+        shape.impulse(-impulse * 0.42F, 0.32F);
     }
 
-    private int clampMovement(float movement) {
-        return Math.max((int) (10 - movement*2f), 1);
+    private record AnimationDrive(float vertical, float lateral, float arm) {
+        private static final AnimationDrive NONE = new AnimationDrive(0F, 0F, 0F);
     }
 
-    /**
-     * Return the distance from the median of the two provided boundary points from a given point
-     *
-     * @param p1    Lower boundary point (inclusive)
-     * @param p2    Upper boundary point (inclusive)
-     * @param point The target point within the range of {@code p1} and {@code p2} to get the distance from the median of
-     *
-     * @return A {@code float} indicating how far the provided {@code point} is from the median of the two boundary
-     *         points, with {@code 1f} being at the median exactly, and {@code 0f} being at either of the two
-     *         provided boundary points.<br>
-     *         If the provided point is in the latter half of the range between the two boundary points, the returned
-     *         float will be negative.
-     *
-     * @throws IllegalArgumentException If {@code p1} is equal to or greater than {@code p2},
-     *                                  or if {@code point} is not within the specified range.
-     */
-    @SuppressWarnings("SameParameterValue")
-    private static float distanceFromMedian(final int p1, final int p2, float point) {
-        // sanity checks
-        if(p1 >= p2) {
-            throw new IllegalArgumentException("p2 must be greater than p1");
-        }
-        if(point < p1 || point > p2) {
-            throw new IllegalArgumentException(point + " is not within bounds of (" + p1 + ", " + p2 + ")");
+    /** Fixed-timestep, semi-implicit damped spring with hard safety bounds. */
+    private static final class SpringAxis {
+        private float position;
+        private float previous;
+        private float velocity;
+
+        private void snapshot() {
+            previous = position;
         }
 
-        if(point == p1 || point == p2) {
-            return 0;
+        private void step(float target, float drive, float stiffness, float dampingRatio,
+                          float positionLimit, float velocityLimit, float accelerationLimit) {
+            stiffness = Mth.clamp(stiffness, 0.005F, 0.45F);
+            dampingRatio = Mth.clamp(dampingRatio, 0.2F, 1.5F);
+            float damping = 2F * dampingRatio * (float) Math.sqrt(stiffness);
+            // Semi-implicit Euler is stable only below its discrete damping boundary. Tight armor can
+            // legitimately request the maximum lateral stiffness and damping together, so constrain
+            // the integrator coefficient rather than the user's physical controls.
+            damping = Math.min(damping, 1.98F - stiffness * 0.5F);
+            float acceleration = (target - position) * stiffness + drive - velocity * damping;
+            acceleration = Mth.clamp(acceleration, -accelerationLimit, accelerationLimit);
+            velocity = Mth.clamp(velocity + acceleration, -velocityLimit, velocityLimit);
+            position += velocity;
+
+            if(position > positionLimit) {
+                position = positionLimit;
+                if(velocity > 0F) velocity = 0F;
+            } else if(position < -positionLimit) {
+                position = -positionLimit;
+                if(velocity < 0F) velocity = 0F;
+            }
+
+            if(!Float.isFinite(position) || !Float.isFinite(velocity)) {
+                reset();
+            }
         }
-        // subtract p1 to get the actual inner range, then divide to get the median
-        float median = (p2 - p1) / 2f;
-        point -= p1;
-        if(point > median) {
-            // invert the provided point to instead become smaller the further we are away from the median
-            // in the latter half of the specified range
-            point = -(median - (point - median));
+
+        private void impulse(float amount, float velocityLimit) {
+            if(Float.isFinite(amount)) {
+                velocity = Mth.clamp(velocity + amount, -velocityLimit, velocityLimit);
+            }
         }
-        return point / median;
+
+        private void reset() {
+            position = 0F;
+            previous = 0F;
+            velocity = 0F;
+        }
     }
 }

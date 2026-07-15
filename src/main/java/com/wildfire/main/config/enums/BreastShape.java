@@ -17,6 +17,7 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.util.ByIdMap;
 
+import java.util.Optional;
 import java.util.function.IntFunction;
 
 /**
@@ -29,7 +30,8 @@ public enum BreastShape {
     ROUND("round"),
     NATURAL("natural"),
     TEARDROP("teardrop"),
-    BELL("bell");
+    BELL("bell"),
+    ANIME("anime");
 
     public static final IntFunction<BreastShape> BY_ID =
             ByIdMap.continuous(BreastShape::ordinal, values(), ByIdMap.OutOfBoundsStrategy.CLAMP);
@@ -50,12 +52,26 @@ public enum BreastShape {
     }
 
     public static BreastShape byName(String id) {
+        return fromName(id).orElse(CLASSIC);
+    }
+
+    /**
+     * Resolves a persisted textual identifier without applying a compatibility fallback.
+     *
+     * <p>{@link #byName(String)} intentionally remains forgiving for ordinary configuration and
+     * network compatibility. Importers that must distinguish corrupt input from {@code classic}
+     * can use this method instead.</p>
+     */
+    public static Optional<BreastShape> fromName(String id) {
+        if(id == null) {
+            return Optional.empty();
+        }
         for(BreastShape shape : values()) {
             if(shape.id.equalsIgnoreCase(id)) {
-                return shape;
+                return Optional.of(shape);
             }
         }
-        return CLASSIC;
+        return Optional.empty();
     }
 
     public Component displayName() {
@@ -63,6 +79,13 @@ public enum BreastShape {
     }
 
     public BreastShape next() {
-        return values()[(ordinal() + 1) % values().length];
+        return switch(this) {
+            case CLASSIC -> ANIME;
+            case ANIME -> ROUND;
+            case ROUND -> NATURAL;
+            case NATURAL -> TEARDROP;
+            case TEARDROP -> BELL;
+            case BELL -> CLASSIC;
+        };
     }
 }

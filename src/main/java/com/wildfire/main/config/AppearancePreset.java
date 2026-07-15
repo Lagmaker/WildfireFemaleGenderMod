@@ -12,9 +12,12 @@ package com.wildfire.main.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
+import com.google.gson.JsonPrimitive;
 import com.wildfire.main.WildfireGender;
+import com.wildfire.main.config.enums.BreastShape;
 import com.wildfire.main.config.types.ConfigKey;
 import com.wildfire.main.entitydata.PlayerConfig;
 import net.fabricmc.loader.api.FabricLoader;
@@ -35,7 +38,7 @@ import java.util.Locale;
  * Portable, versioned appearance presets stored in {@code config/FemaleGenderMod/presets}.
  */
 public final class AppearancePreset {
-    public static final int SCHEMA_VERSION = 2;
+    public static final int SCHEMA_VERSION = 3;
     private static final int MIN_SUPPORTED_SCHEMA = 1;
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -50,6 +53,9 @@ public final class AppearancePreset {
             Configuration.BREASTS_HEIGHT,
             Configuration.BREASTS_PROJECTION,
             Configuration.BREASTS_BALANCE,
+            Configuration.BREASTS_ROOT_WIDTH,
+            Configuration.BREASTS_OUTER_FULLNESS,
+            Configuration.BREASTS_DROP,
             Configuration.BREASTS_SHAPE,
             Configuration.BREASTS_NIPPLES,
             Configuration.BREASTS_NIPPLE_SIZE,
@@ -105,14 +111,13 @@ public final class AppearancePreset {
             throw new IncompatiblePresetException(schema);
         }
 
-        JsonObject appearance = root.getAsJsonObject("appearance");
-        if(appearance == null) {
-            throw new JsonParseException("Missing appearance object");
-        }
+        JsonObject appearance = requiredAppearance(root);
+        validatePresetShape(appearance);
 
         Configuration config = player.getConfig();
-        // Applying a preset must not inherit values that happened to be active beforehand. This also
-        // gives schema-1 presets deterministic defaults for fields introduced by schema 2.
+        // A preset is a complete appearance snapshot: absent values never inherit whatever happened
+        // to be active before it was applied. Version-specific migrations below then restore the
+        // exact neutral values for fields that did not exist in that schema.
         for(ConfigKey<?> key : APPEARANCE_KEYS) {
             setDefault(config, key);
         }
@@ -121,6 +126,7 @@ public final class AppearancePreset {
                 loadKey(appearance, key, config);
             }
         }
+        migrate(schema, config);
         player.loadFromConfig(false);
         player.save();
         return compatibility(root);
@@ -169,7 +175,11 @@ public final class AppearancePreset {
         String name = requiredString(root, "name");
         String modVersion = optionalString(root, "source_mod_version", "unknown");
         String minecraftVersion = optionalString(root, "source_minecraft_version", "unknown");
-        return new Info(path, name, modVersion, minecraftVersion, schema, compatibility(root));
+        Compatibility compatibility = compatibility(root);
+        if(compatibility != Compatibility.INCOMPATIBLE_SCHEMA) {
+            validatePresetShape(requiredAppearance(root));
+        }
+        return new Info(path, name, modVersion, minecraftVersion, schema, compatibility);
     }
 
     private static JsonObject readRoot(Path path) throws IOException {
@@ -239,6 +249,68 @@ public final class AppearancePreset {
 
     private static String optionalString(JsonObject root, String key, String fallback) {
         return root.has(key) && root.get(key).isJsonPrimitive() ? root.get(key).getAsString() : fallback;
+    }
+
+    private static JsonObject requiredAppearance(JsonObject root) {
+        JsonElement appearance = root.get("appearance");
+        if(!(appearance instanceof JsonObject object)) {
+            throw new JsonParseException("Missing or malformed appearance object");
+        }
+        return object;
+    }
+
+    /**
+     * Presets are portable user data, so an unknown profile must be reported instead of being
+     * silently rewritten as Classic. Normal local configuration and packets keep the forgiving
+     * {@link BreastShape#byName(String)} fallback.
+     */
+    private static void validatePresetShape(JsonObject appearance) {
+        String key = Configuration.BREASTS_SHAPE.getKey();
+        JsonElement element = appearance.get(key);
+        if(element == null) {
+            return;
+        }
+        if(!(element instanceof JsonPrimitive primitive) || !primitive.isString()) {
+            throw new JsonParseException("Invalid " + key + ": expected a textual profile identifier");
+        }
+
+        String id = primitive.getAsString();
+        if(BreastShape.fromName(id).isEmpty()) {
+            throw new JsonParseException("Unknown " + key + " profile: " + id);
+        }
+    }
+
+    private static void migrate(int schema, Configuration config) {
+        switch(schema) {
+            case 1 -> migrateSchemaOne(config);
+            case 2 -> migrateSchemaTwo(config);
+            case 3 -> {
+                // Current schema: values are applied directly with no compatibility rewrite.
+            }
+            default -> throw new IllegalArgumentException("Unsupported preset schema " + schema);
+        }
+    }
+
+    /**
+     * Schema 1 had no named profile or nipple-detail settings. It therefore maps to the original
+     * Classic silhouette, disabled detail, the original detail-size default, and schema-3's neutral
+     * expansion controls.
+     */
+    private static void migrateSchemaOne(Configuration config) {
+        config.set(Configuration.BREASTS_SHAPE, BreastShape.CLASSIC);
+        config.set(Configuration.BREASTS_NIPPLES, Configuration.BREASTS_NIPPLES.getDefault());
+        config.set(Configuration.BREASTS_NIPPLE_SIZE, Configuration.BREASTS_NIPPLE_SIZE.getDefault());
+        migrateSchemaTwo(config);
+    }
+
+    /**
+     * Schema 2 predated the generated mesh's root span, outer fullness, and independent drop.
+     * Neutral values preserve its established silhouette instead of inheriting live editor state.
+     */
+    private static void migrateSchemaTwo(Configuration config) {
+        config.set(Configuration.BREASTS_ROOT_WIDTH, 1F);
+        config.set(Configuration.BREASTS_OUTER_FULLNESS, 1F);
+        config.set(Configuration.BREASTS_DROP, 0F);
     }
 
     private static <T> void saveKey(JsonObject output, ConfigKey<T> key, Configuration config) {

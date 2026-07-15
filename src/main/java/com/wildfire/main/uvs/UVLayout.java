@@ -97,6 +97,11 @@ public class UVLayout {
         return quads.equals(other.quads);
     }
 
+    @Override
+    public int hashCode() {
+        return quads.hashCode();
+    }
+
     // used to avoid potential class load deadlocks from referencing Immutable::new in CODEC
     private static Immutable createImmutable(Map<UVDirection, @Nullable UVQuad> quads) {
         return new Immutable(quads);
