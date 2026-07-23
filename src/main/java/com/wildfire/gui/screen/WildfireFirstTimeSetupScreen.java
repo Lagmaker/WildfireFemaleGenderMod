@@ -129,7 +129,7 @@ public class WildfireFirstTimeSetupScreen extends BaseWildfireScreen {
                     // note that we wait for this to ensure that we don't have any inconsistencies with the synced
                     // data once we open the main menu
                     WildfireGenderClient.loadGenderInfo(clientUUID, false, true).join();
-                } catch(CompletionException _) {
+                } catch(CompletionException ignored) {
                     // loadGenderInfo should log any errors for us
                     return;
                 } catch(Exception e) {

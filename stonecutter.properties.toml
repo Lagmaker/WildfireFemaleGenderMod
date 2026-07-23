@@ -1,7 +1,7 @@
 loader_version = "0.19.2"
 
 # Mod Properties
-mod_version = "5.0.0-Beta.5"
+mod_version = "5.0.0-Beta.6"
 maven_group = "com.wildfiregender.main"
 archives_base_name = "Female-Gender-Mod"
 
@@ -13,6 +13,14 @@ debug.load_modmenu = false
 publish.type = "BETA"
 # TODO setup curseforge publishing
 publish.modrinth = "bcOsQHnC"
+
+["1.20.1"]
+    dependencies.minecraft = ">=1.20.1 <1.20.2"
+    dependencies.fabric = "0.92.11+1.20.1"
+    dependencies.modmenu = "7.2.2"
+    publish.version_title = "1.20.1"
+    publish.min_version = "1.20.1"
+    publish.max_version = "1.20.1"
 
 ["26.1"]
     dependencies.minecraft = ">=26.1 <26.2"

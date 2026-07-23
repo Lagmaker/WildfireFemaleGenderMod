@@ -146,7 +146,7 @@ public class WildfireCreditsScreen extends BaseWildfireScreen {
                 .position(this.width / 2 - 89, navigationY + 6)
                 .size(60, 13)
                 .active(creditsPage != 0)
-                .onPress(_ -> {
+                .onPress(ignored -> {
                     if(creditsPage > 0) {
                         creditsPage--;
                     }

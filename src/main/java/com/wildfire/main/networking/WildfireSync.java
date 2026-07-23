@@ -54,7 +54,7 @@ public final class WildfireSync {
         PayloadTypeRegistry.serverboundPlay().register(SyncHelloPacket.Serverbound.ID, SyncHelloPacket.Serverbound.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(SyncHelloPacket.Serverbound.ID, SyncHelloPacket.Serverbound.CODEC);
 
-        ServerPlayConnectionEvents.INIT.register((handler, _) -> {
+        ServerPlayConnectionEvents.INIT.register((handler, server) -> {
             ServerPlayNetworking.registerReceiver(handler, ServerboundSyncPacket.ID, ServerboundSyncPacket::handle);
             ServerPlayNetworking.registerReceiver(handler, SyncHelloPacket.Serverbound.ID, SyncHelloPacket.Serverbound::handle);
         });

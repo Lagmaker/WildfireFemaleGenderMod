@@ -216,7 +216,7 @@ public class WildfireBreastCustomizationScreen extends BaseWildfireScreen {
                 .message(() -> Component.translatable("wildfire_gender.presets.button"))
                 .position(this.width / 2 - 36 + HALF_WIDTH + 4, tabOffsetY + 94)
                 .size(HALF_WIDTH, 20)
-                .onPress(_ -> {
+                .onPress(ignored -> {
                     //~ if >=26.2 'minecraft.setScreen' -> 'minecraft.gui.setScreen'
                     minecraft.gui.setScreen(new WildfirePresetScreen(this, playerUUID));
                 }));
@@ -308,7 +308,7 @@ public class WildfireBreastCustomizationScreen extends BaseWildfireScreen {
                 .message(() -> Component.translatable("wildfire_gender.char_settings.preview_motion"))
                 .position(this.width / 2 - 130, this.height / 2 + 65)
                 .size(80, 15)
-                .onPress(_ -> {
+                .onPress(ignored -> {
                     plr.getLeftBreastPhysics().addPreviewImpulse(-0.34f);
                     plr.getRightBreastPhysics().addPreviewImpulse(-0.30f);
                 })

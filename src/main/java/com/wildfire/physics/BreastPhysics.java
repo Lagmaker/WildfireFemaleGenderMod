@@ -68,20 +68,17 @@ public class BreastPhysics {
     }
 
     private static boolean vehicleSuppressesRotation(Entity vehicle) {
-        return switch(vehicle) {
-            // while you aren't able to normally ride chickens in vanilla, it is still possible through
-            // means like /ride, and as chickens attempt to force the rider's body yaw to the same yaw
-            // as the chicken (which is likely intended only for baby zombies), this results in unintended
-            // behavior with what we're doing
-            case Chicken _ -> true;
-            // unsaddled horses (and llamas, which also extend AbstractDonkeyEntity?) also break rotation
-            // physics, despite acting similarly to other entities where the rider's body yaw is allowed to
-            // (somewhat) freely move around
-            case AbstractHorse horse when !horse.isSaddled() -> true;
-            // camels also suffer from largely the same issue as unsaddled horses when sitting or standing up
-            case Camel camel when camel.refuseToMove() -> true;
-            default -> false;
-        };
+        // While you aren't able to normally ride chickens in vanilla, it is still possible through
+        // means like /ride, and chickens force the rider's body yaw to their own yaw.
+        if (vehicle instanceof Chicken) {
+            return true;
+        }
+        // Unsaddled horses and llamas also break rotation physics.
+        if (vehicle instanceof AbstractHorse horse && !horse.isSaddled()) {
+            return true;
+        }
+        // Camels suffer from the same issue while sitting or standing up.
+        return vehicle instanceof Camel camel && camel.refuseToMove();
     }
 
     private static boolean shouldUseVehicleYaw(LivingEntity rider, Entity vehicle) {
@@ -251,45 +248,39 @@ public class BreastPhysics {
     }
 
     private void tickVehicle(LivingEntity entity, final float bounceIntensity, final float breastWeight) {
-        switch(entity.getVehicle()) {
-            case Boat boat -> {
-                int rowTime = (int) boat.getRowingTime(0, entity.walkAnimation.position());
-                int rowTime2 = (int) boat.getRowingTime(1, entity.walkAnimation.position());
+        Entity vehicle = entity.getVehicle();
+        if (vehicle instanceof Boat boat) {
+            int rowTime = (int) boat.getRowingTime(0, entity.walkAnimation.position());
+            int rowTime2 = (int) boat.getRowingTime(1, entity.walkAnimation.position());
 
-                float rotationL = (float) Mth.clampedLerp(-(float)Math.PI / 3F, -0.2617994F, (double) ((Mth.sin(-rowTime2) + 1.0F) / 2.0F));
-                float rotationR = (float) Mth.clampedLerp(-(float)Math.PI / 4F, (float)Math.PI / 4F, (double) ((Mth.sin(-rowTime + 1.0F) + 1.0F) / 2.0F));
-                if(rotationL < -1 || rotationR < -0.6f) {
-                    this.targetBounceY = bounceIntensity / 3.25f;
-                }
+            float rotationL = (float) Mth.clampedLerp(-(float)Math.PI / 3F, -0.2617994F, (double) ((Mth.sin(-rowTime2) + 1.0F) / 2.0F));
+            float rotationR = (float) Mth.clampedLerp(-(float)Math.PI / 4F, (float)Math.PI / 4F, (double) ((Mth.sin(-rowTime + 1.0F) + 1.0F) / 2.0F));
+            if(rotationL < -1 || rotationR < -0.6f) {
+                this.targetBounceY = bounceIntensity / 3.25f;
             }
-            case Minecart cart -> {
-                float speed = (float) cart.getDeltaMovement().lengthSqr();
-                if(Math.random() * speed < 0.5f && speed > 0.2f) {
-                    this.targetBounceY = (Math.random() > 0.5 ? -bounceIntensity : bounceIntensity) / 6f;
-                    this.targetBounceY += breastWeight;
-                }
+        } else if (vehicle instanceof Minecart cart) {
+            float speed = (float) cart.getDeltaMovement().lengthSqr();
+            if(Math.random() * speed < 0.5f && speed > 0.2f) {
+                this.targetBounceY = (Math.random() > 0.5 ? -bounceIntensity : bounceIntensity) / 6f;
+                this.targetBounceY += breastWeight;
             }
-            case AbstractHorse horse -> {
-                float movement = (float) horse.getDeltaMovement().lengthSqr();
-                if(horse.getAge() % clampMovement(movement) == 5 && movement > 0.05f) {
-                    this.targetBounceY = bounceIntensity / 4f;
-                    this.targetBounceY += breastWeight;
-                }
+        } else if (vehicle instanceof AbstractHorse horse) {
+            float movement = (float) horse.getDeltaMovement().lengthSqr();
+            if(horse.getAge() % clampMovement(movement) == 5 && movement > 0.05f) {
+                this.targetBounceY = bounceIntensity / 4f;
+                this.targetBounceY += breastWeight;
             }
-            case Pig pig -> {
-                float movement = (float) pig.getDeltaMovement().lengthSqr();
-                if(pig.getAge() % clampMovement(movement) == 5 && movement > 0.002f) {
-                    this.targetBounceY = (bounceIntensity * Mth.clamp(movement * 75, 0.1f, 1f)) / 4f;
-                    this.targetBounceY += breastWeight;
-                }
+        } else if (vehicle instanceof Pig pig) {
+            float movement = (float) pig.getDeltaMovement().lengthSqr();
+            if(pig.getAge() % clampMovement(movement) == 5 && movement > 0.002f) {
+                this.targetBounceY = (bounceIntensity * Mth.clamp(movement * 75, 0.1f, 1f)) / 4f;
+                this.targetBounceY += breastWeight;
             }
-            case Strider strider -> {
-                double heightOffset = (double)strider.getBbHeight() - 0.19
-                        + (double)(0.12F * Mth.cos(strider.walkAnimation.position() * 1.5f)
-                        * 2F * Math.min(0.25F, strider.walkAnimation.speed()));
-                this.targetBounceY += ((float) (heightOffset * 3f) - 4.5f) * bounceIntensity;
-            }
-            case null, default -> {}
+        } else if (vehicle instanceof Strider strider) {
+            double heightOffset = (double)strider.getBbHeight() - 0.19
+                    + (double)(0.12F * Mth.cos(strider.walkAnimation.position() * 1.5f)
+                    * 2F * Math.min(0.25F, strider.walkAnimation.speed()));
+            this.targetBounceY += ((float) (heightOffset * 3f) - 4.5f) * bounceIntensity;
         }
     }
 

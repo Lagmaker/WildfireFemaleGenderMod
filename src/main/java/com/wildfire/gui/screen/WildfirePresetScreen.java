@@ -61,13 +61,13 @@ public class WildfirePresetScreen extends BaseWildfireScreen {
                 .message(() -> Component.translatable("wildfire_gender.presets.save"))
                 .position(x - 36, y - 27)
                 .size(81, 20)
-                .onPress(_ -> savePreset()));
+                .onPress(ignored -> savePreset()));
 
         addButton(builder -> builder
                 .message(() -> Component.translatable("wildfire_gender.presets.apply"))
                 .position(x + 49, y - 27)
                 .size(81, 20)
-                .onPress(_ -> applyPreset())
+                .onPress(ignored -> applyPreset())
                 .active(selected != null && selected.compatibility() != AppearancePreset.Compatibility.INVALID
                         && selected.compatibility() != AppearancePreset.Compatibility.INCOMPATIBLE_SCHEMA)
                 .tooltip(selected == null ? null : Tooltip.create(versionDescription(selected))));
@@ -76,7 +76,7 @@ public class WildfirePresetScreen extends BaseWildfireScreen {
                 .message(() -> Component.literal("◀"))
                 .position(x - 36, y - 3)
                 .size(28, 20)
-                .onPress(_ -> selectRelative(-1))
+                .onPress(ignored -> selectRelative(-1))
                 .active(presets.size() > 1));
 
         addButton(builder -> builder
@@ -85,7 +85,7 @@ public class WildfirePresetScreen extends BaseWildfireScreen {
                         : Component.literal(selected.name()))
                 .position(x - 4, y - 3)
                 .size(102, 20)
-                .onPress(_ -> {
+                .onPress(ignored -> {
                 })
                 .active(false)
                 .tooltip(selected == null ? null : Tooltip.create(versionDescription(selected))));
@@ -94,7 +94,7 @@ public class WildfirePresetScreen extends BaseWildfireScreen {
                 .message(() -> Component.literal("▶"))
                 .position(x + 102, y - 3)
                 .size(28, 20)
-                .onPress(_ -> selectRelative(1))
+                .onPress(ignored -> selectRelative(1))
                 .active(presets.size() > 1));
 
         addButton(builder -> builder
@@ -119,7 +119,7 @@ public class WildfirePresetScreen extends BaseWildfireScreen {
                 .message(() -> Component.translatable("gui.done"))
                 .position(x + 49, y + 42)
                 .size(81, 20)
-                .onPress(_ -> onClose()));
+                .onPress(ignored -> onClose()));
     }
 
     private void savePreset() {

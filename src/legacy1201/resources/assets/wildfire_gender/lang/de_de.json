@@ -1,0 +1,41 @@
+{
+	"category.wildfire_gender.generic": "Wildfire's Weibliche Geschlechtsmod",
+	"key.wildfire_gender.gender_menu": "Geschlechtsmenü",
+
+	"wildfire_gender.player_list.title": "Weibliche Geschlechts Mod",
+	"wildfire_gender.player_list.settings_button": "Einstellungen",
+	"wildfire_gender.player_list.sync_status": "Synchronisierungsstatus",
+	"wildfire_gender.player_list.state.loading": "Lade Spieler..",
+	"wildfire_gender.player_list.state.synced": "Geladener Spieler",
+
+	"wildfire_gender.wardrobe.title": "Anpassungsmenü",
+	"wildfire_gender.wardrobe.slider.breast_size": "Brustgröße: %s%%",
+	"wildfire_gender.wardrobe.slider.separation": "Separierung: %s",
+	"wildfire_gender.wardrobe.slider.height": "Höhe: %s",
+	"wildfire_gender.wardrobe.slider.depth": "Tiefe: %s",
+	"wildfire_gender.wardrobe.slider.rotation": "Drehung: %s degrees",
+
+	"wildfire_gender.appearance_settings.title": "Aussehen",
+	"wildfire_gender.char_settings.title": "Spieler Einstellungen",
+	"wildfire_gender.char_settings.physics": "Brustphysik: %s",
+	"wildfire_gender.char_settings.hide_in_armor": "Versteckt mit Rüstung: %s",
+
+	"wildfire_gender.label.gender": "Geschlecht",
+	"wildfire_gender.label.female": "Weiblich",
+	"wildfire_gender.label.male": "Männlich",
+	"wildfire_gender.label.other": "Andere",
+
+	"wildfire_gender.label.enabled": "Aktiviert",
+	"wildfire_gender.label.disabled": "Deaktiviert",
+	"wildfire_gender.label.yes": "Ja",
+	"wildfire_gender.label.no": "Nein",
+	"wildfire_gender.label.with_creator": "Du spielst auf einem Server mit dem Programmierer dieser Mod!",
+
+	"wildfire_gender.slider.bounce": "Wackel Intensität: %s%%",
+	"wildfire_gender.slider.floppy": "Brust Schwung: %s%%",
+	"wildfire_gender.slider.min_bounce": "Warum ist die Physik überhaupt an?",
+	"wildfire_gender.slider.max_bounce": "Anime Brust Physik!",
+	"wildfire_gender.tooltip.bounce_warning": "Wenn die 'Wackel Intensität' zu stark einstellen ist sieht es nicht sehr natürlich aus!",
+
+	"wildfire_gender.cancer_awareness.title": "Hey, es ist Monat des Brustkrebses!"
+}

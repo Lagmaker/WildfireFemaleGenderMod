@@ -97,7 +97,7 @@ public class FakeGUIPlayer {
             try {
                 // while we don't have proper support for mannequins right now, we can most certainly fake it
                 config = (PlayerConfig) EntityConfig.CACHE.get(entity.getUUID(), () -> new PlayerConfig(entity.getUUID()));
-            } catch(ExecutionException | ClassCastException _) {
+            } catch(ExecutionException | ClassCastException ignored) {
                 return entity;
             }
 
@@ -145,7 +145,7 @@ public class FakeGUIPlayer {
                 try {
                     skinLookup.get().ifPresent(accessor::invokeSetSkin);
                     accessor.setSkinLookup(null);
-                } catch(Exception _) {
+                } catch(Exception ignored) {
                 }
             }
         }

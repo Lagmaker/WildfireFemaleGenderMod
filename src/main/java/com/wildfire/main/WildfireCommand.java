@@ -96,7 +96,7 @@ public class WildfireCommand {
                 .then(ClientCommands.literal("target")
                         .executes(WildfireCommand::getEntityLookingAt))
                 .then(ClientCommands.literal("firsttime")
-                        .executes(_ -> {
+                        .executes(ignored -> {
                             client.execute(() -> {
                                 //~ if >=26.2 'client.setScreen' -> 'client.gui.setScreen'
                                 client.schedule(() -> client.gui.setScreen(new WildfireFirstTimeSetupScreen(null, client.player.getUUID())));
@@ -137,7 +137,7 @@ public class WildfireCommand {
         T value = defaultValue;
         try {
             value = ctx.getArgument(name, clazz);
-        } catch(IllegalArgumentException _) {}
+        } catch(IllegalArgumentException ignored) {}
         return value;
     }
 

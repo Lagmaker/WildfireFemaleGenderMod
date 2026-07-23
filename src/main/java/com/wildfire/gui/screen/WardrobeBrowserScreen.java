@@ -103,7 +103,7 @@ public class WardrobeBrowserScreen extends BaseWildfireScreen {
                 .message(() -> plr.getGender().getDisplayName())
                 .position(this.width / 2 - 130, this.height / 2 + 33)
                 .size(80, 15)
-                .onPress(_ -> {
+                .onPress(ignored -> {
                     plr.updateGender(plr.getGender().next());
                     plr.save();
                     rebuildWidgets();
@@ -113,7 +113,7 @@ public class WardrobeBrowserScreen extends BaseWildfireScreen {
                 .message(() -> Component.translatable("wildfire_gender.appearance_settings.title").append("..."))
                 .position(this.width / 2 - 36, this.height / 2 - 63)
                 .size(157, 20)
-                .onPress(_ -> {
+                .onPress(ignored -> {
                     //~ if >=26.2 'setScreen' -> 'gui.setScreen'
                     client.gui.setScreen(new WildfireBreastCustomizationScreen(WardrobeBrowserScreen.this, this.playerUUID));
                 })
@@ -126,7 +126,7 @@ public class WardrobeBrowserScreen extends BaseWildfireScreen {
             builder.renderer((button, ctx, mouseX, mouseY, partialTicks) -> {
                 ctx.blit(RenderPipelines.GUI_TEXTURED, CLOUD_ICON, button.getX() + 2, button.getY() + 2, 0, 0, 20, 14, 32, 26, 32, 26);
             });
-            builder.onPress(_ -> {
+            builder.onPress(ignored -> {
                 //~ if >=26.2 'setScreen' -> 'gui.setScreen'
                 client.gui.setScreen(new WildfireCloudSyncScreen(this, this.playerUUID));
             });
@@ -143,7 +143,7 @@ public class WardrobeBrowserScreen extends BaseWildfireScreen {
                 .message(() -> Component.translatable("wildfire_gender.credits.title").append("..."))
                 .position(this.width / 2 + 2, this.height / 2 + 33)
                 .size(78, 15)
-                .onPress(_ -> {
+                .onPress(ignored -> {
                     //~ if >=26.2 'setScreen' -> 'gui.setScreen'
                     client.gui.setScreen(new WildfireCreditsScreen(WardrobeBrowserScreen.this, this.playerUUID));
                 }));

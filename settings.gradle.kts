@@ -29,6 +29,7 @@ stonecutter {
     // lot of control over the actual build scripts
 
     shared {
+        version("1.20.1")
         version("26.1")
         version("26.2")
         vcsVersion = "26.2"

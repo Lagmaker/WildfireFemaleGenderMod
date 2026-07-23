@@ -51,7 +51,7 @@
         "fabric-resource-loader-v1": "*",
         "fabric-registry-sync-v0": "*",
         "minecraft": "${minecraft_dependency}",
-        "java": ">=25"
+        "java": "${java_dependency}"
     },
     "conflicts": {
         "skinlayers": "*",
